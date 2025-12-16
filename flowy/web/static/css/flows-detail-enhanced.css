@@ -100,7 +100,18 @@
     line-height: var(--leading-normal);
 }
 
-/* 页面容器 - 使用Bootstrap的container-fluid，不需要额外样式 */
+/* 页面容器 - 与首页保持一致的最大宽度 */
+.container-fluid {
+    max-width: 1440px;
+    padding: 0 1.5rem;
+}
+
+/* 响应式调整 */
+@media (max-width: 480px) {
+    .container-fluid {
+        padding: 0 1rem;
+    }
+}
 
 /* ========================================
    页面标题区优化
@@ -806,6 +817,11 @@
 
 .flow-detail-page > .execution-stats-container {
     margin-top: 0;
+}
+
+/* 执行趋势分析区域 */
+.execution-trends-container {
+    margin-bottom: var(--space-6);
 }
 
 .kpi-cards-grid {

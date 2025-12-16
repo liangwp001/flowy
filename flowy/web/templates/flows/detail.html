@@ -258,69 +258,67 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
 
-    <!-- 数据可视化区 - 合并趋势分析 -->
+        <!-- 数据可视化区 - 合并趋势分析 -->
         {% if stats.total_count > 0 %}
         <!-- 执行趋势与时间分析 -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="detail-card fade-in">
-                    <div class="card-header-enhanced">
-                        <h5 class="card-title-enhanced">
-                            <i class="bi bi-graph-up"></i> 执行趋势与时间分析
-                        </h5>
-                        <div class="time-range-selector">
-                            <button type="button" class="time-range-btn" onclick="updateChartData(7)">7天</button>
-                            <button type="button" class="time-range-btn active" onclick="updateChartData(30)">30天</button>
-                            <button type="button" class="time-range-btn" onclick="updateChartData(90)">90天</button>
+        <section class="execution-trends-container slide-up" aria-labelledby="trends-title">
+            <div class="detail-card">
+                <div class="card-header-enhanced">
+                    <h2 id="trends-title" class="card-title-enhanced">
+                        <i class="bi bi-graph-up" aria-hidden="true"></i> 执行趋势与时间分析
+                    </h2>
+                    <div class="time-range-selector">
+                        <button type="button" class="time-range-btn" onclick="updateChartData(7)">7天</button>
+                        <button type="button" class="time-range-btn active" onclick="updateChartData(30)">30天</button>
+                        <button type="button" class="time-range-btn" onclick="updateChartData(90)">90天</button>
+                    </div>
+                </div>
+                <div class="card-body-enhanced">
+                    <div class="row">
+                        <!-- 执行趋势图 -->
+                        <div class="col-lg-8 mb-4 mb-lg-0">
+                            <div class="chart-section">
+                                <h3 class="chart-title" id="trend-chart-title">执行趋势图</h3>
+                                <div class="chart-container-enhanced" id="trendChartContainer" role="img" aria-labelledby="trend-chart-title">
+                                    <div class="chart-skeleton" id="trendSkeleton" aria-hidden="true"></div>
+                                    <canvas id="trendChart" style="display: none;" aria-label="显示工作流执行成功和失败的趋势"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 执行时长分布 -->
+                        <div class="col-lg-4">
+                            <div class="chart-section">
+                                <h3 class="chart-title" id="duration-chart-title">执行时长分布</h3>
+                                <div class="chart-container-enhanced" id="durationChartContainer" role="img" aria-labelledby="duration-chart-title">
+                                    <div class="chart-skeleton" id="durationSkeleton" aria-hidden="true"></div>
+                                    <canvas id="durationChart" style="display: none;" aria-label="显示工作流执行时长的分布情况"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-body-enhanced">
-                        <div class="row">
-                            <!-- 执行趋势图 -->
-                            <div class="col-lg-8 mb-4 mb-lg-0">
-                                <div class="chart-section">
-                                    <h3 class="chart-title" id="trend-chart-title">执行趋势图</h3>
-                                    <div class="chart-container-enhanced" id="trendChartContainer" role="img" aria-labelledby="trend-chart-title">
-                                        <div class="chart-skeleton" id="trendSkeleton" aria-hidden="true"></div>
-                                        <canvas id="trendChart" style="display: none;" aria-label="显示工作流执行成功和失败的趋势"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- 执行时长分布 -->
-                            <div class="col-lg-4">
-                                <div class="chart-section">
-                                    <h3 class="chart-title" id="duration-chart-title">执行时长分布</h3>
-                                    <div class="chart-container-enhanced" id="durationChartContainer" role="img" aria-labelledby="duration-chart-title">
-                                        <div class="chart-skeleton" id="durationSkeleton" aria-hidden="true"></div>
-                                        <canvas id="durationChart" style="display: none;" aria-label="显示工作流执行时长的分布情况"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- 24小时执行分布 -->
-                        <div class="mt-4">
-                            <div class="chart-section">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <h3 class="chart-title" id="hourly-chart-title">24小时执行分布</h3>
-                                    <small class="text-muted">
-                                        <i class="bi bi-info-circle" aria-hidden="true"></i>
-                                        <span id="hourly-chart-description">显示每个小时内成功、失败、等待中和运行中的执行次数</span>
-                                    </small>
-                                </div>
-                                <div class="chart-container-enhanced hourly-chart" id="hourlyChartContainer" role="img" aria-labelledby="hourly-chart-title hourly-chart-description">
-                                    <div class="chart-skeleton" id="hourlySkeleton" aria-hidden="true"></div>
-                                    <canvas id="hourlyChart" style="display: none;" aria-label="显示24小时内工作流执行情况的分布图"></canvas>
-                                </div>
+                    <!-- 24小时执行分布 -->
+                    <div class="mt-4">
+                        <div class="chart-section">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <h3 class="chart-title" id="hourly-chart-title">24小时执行分布</h3>
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle" aria-hidden="true"></i>
+                                    <span id="hourly-chart-description">显示每个小时内成功、失败、等待中和运行中的执行次数</span>
+                                </small>
+                            </div>
+                            <div class="chart-container-enhanced hourly-chart" id="hourlyChartContainer" role="img" aria-labelledby="hourly-chart-title hourly-chart-description">
+                                <div class="chart-skeleton" id="hourlySkeleton" aria-hidden="true"></div>
+                                <canvas id="hourlyChart" style="display: none;" aria-label="显示24小时内工作流执行情况的分布图"></canvas>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
         {% else %}
         <!-- 空状态 -->
         <div class="detail-card">
@@ -336,7 +334,7 @@
             </div>
         </div>
         {% endif %}
-    </div>
+        </div>
     </div>
 </div>
 
