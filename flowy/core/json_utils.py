@@ -14,13 +14,15 @@ class JSONUtil:
     """基于orjson的JSON序列化工具类"""
 
     @staticmethod
-    def dumps(obj: Any, option: int = None) -> str:
+    def dumps(obj: Any, option: int = None, ensure_ascii: bool = False, **kwargs) -> str:
         """
         将Python对象序列化为JSON字符串
 
         Args:
             obj: 要序列化的Python对象
             option: orjson序列化选项，默认使用OPT_SERIALIZE_NUMPY
+            ensure_ascii: 是否确保ASCII编码（为了兼容标准json模块）
+            **kwargs: 其他兼容性参数（会被忽略）
 
         Returns:
             JSON字符串
@@ -28,6 +30,9 @@ class JSONUtil:
         if option is None:
             # 默认选项：序列化numpy、美化输出、处理非ASCII字符
             option = orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_INDENT_2 | orjson.OPT_SERIALIZE_UUID
+
+        # orjson 默认使用UTF-8，所以 ensure_ascii 参数实际上不影响输出
+        # 这里保留参数是为了兼容性
 
         # 处理特殊类型
         obj = JSONUtil._prepare_object(obj)
@@ -92,19 +97,20 @@ class JSONUtil:
         return JSONUtil.loads(s)
 
     @staticmethod
-    def json_dumps(obj: Any, **kwargs) -> str:
+    def json_dumps(obj: Any, ensure_ascii: bool = False, **kwargs) -> str:
         """
         兼容jsonplus的json_dumps方法
 
         Args:
             obj: 要序列化的Python对象
+            ensure_ascii: 是否确保ASCII编码（为了兼容性）
             **kwargs: 其他参数（为了兼容性保留）
 
         Returns:
             JSON字符串
         """
         # 忽略不支持的参数，只处理基本序列化
-        return JSONUtil.dumps(obj)
+        return JSONUtil.dumps(obj, ensure_ascii=ensure_ascii)
 
     @staticmethod
     def safe_loads(s: Union[str, bytes], default: Any = None) -> Any:
