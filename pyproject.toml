@@ -1,0 +1,49 @@
+[project]
+name = "flowy"
+version = "0.1.0"
+description = "A workflow management system with web UI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Flowy Team"}
+]
+keywords = ["workflow", "task", "automation", "web"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "flask>=3.0.0",
+    "sqlalchemy>=2.0.0",
+    "orjson>=3.9.0",
+    "apscheduler>=3.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["flowy"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"flowy/web/templates" = "flowy/web/templates"
+"flowy/web/static" = "flowy/web/static"
+
+[tool.hatch.build]
+include = [
+    "flowy/**/*.py",
+    "flowy/web/templates/**/*",
+    "flowy/web/static/**/*",
+]
