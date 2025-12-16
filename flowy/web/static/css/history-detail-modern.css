@@ -1,0 +1,980 @@
+/* Flowy 执行历史详情页面 - 现代化优化样式 */
+
+/* ========== CSS变量定义 ========== */
+:root {
+    --primary-color: #6366f1;
+    --primary-dark: #4f46e5;
+    --primary-light: #818cf8;
+    --secondary-color: #f3f4f6;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --info-color: #3b82f6;
+    --text-primary: #111827;
+    --text-secondary: #6b7280;
+    --text-tertiary: #9ca3af;
+    --border-color: #e5e7eb;
+    --background-color: #ffffff;
+    --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --card-hover-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========== 基础布局优化 ========== */
+
+/* 主容器优化 */
+.detail-container {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+/* 内容区域背景 */
+.content-wrapper {
+    background: linear-gradient(to bottom, #f9fafb, #ffffff);
+    min-height: 100vh;
+    padding: 2rem 0;
+}
+
+
+/* ========== 信息卡片现代化设计 ========== */
+
+.info-card {
+    background: var(--background-color);
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: var(--card-shadow);
+    transition: var(--transition);
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.info-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 150px;
+    height: 150px;
+    background: linear-gradient(135deg, transparent, rgba(99, 102, 241, 0.03));
+    border-radius: 50%;
+    transform: translate(30%, -30%);
+}
+
+.info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-hover-shadow);
+}
+
+.info-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    position: relative;
+    z-index: 1;
+}
+
+.info-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.info-card-icon.flow {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+}
+
+.info-card-icon.input {
+    background: linear-gradient(135deg, var(--info-color), #1d4ed8);
+}
+
+.info-card-icon.output {
+    background: linear-gradient(135deg, var(--success-color), #059669);
+}
+
+.info-card-icon.tasks {
+    background: linear-gradient(135deg, var(--warning-color), #d97706);
+}
+
+.info-card-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* Flow信息网格布局 - 每行三列，共两行 */
+.flow-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, auto);
+    gap: 2rem 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.info-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.info-value {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.flow-id-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--secondary-color);
+    border-radius: 0.5rem;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.875rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.flow-id-badge i {
+    font-size: 1rem;
+}
+
+/* ========== 数据展示卡片 ========== */
+
+.data-card {
+    background: var(--background-color);
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: var(--card-shadow);
+    transition: var(--transition);
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+.data-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-hover-shadow);
+}
+
+.data-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.data-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.data-card-title i {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+}
+
+.btn-copy {
+    padding: 0.5rem 1rem;
+    background: var(--secondary-color);
+    color: var(--text-secondary);
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: var(--transition);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-copy:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.btn-copy.copied {
+    background: var(--success-color);
+    color: white;
+}
+
+.json-container {
+    background: #f8f9fa;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    max-height: 400px;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+}
+
+.json-viewer {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+.no-data {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.no-data i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    display: block;
+    opacity: 0.5;
+}
+
+/* ========== 时间线优化 ========== */
+
+.timeline-container {
+    background: var(--background-color);
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: var(--card-shadow);
+    margin-bottom: 2rem;
+}
+
+.timeline-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+}
+
+.timeline-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.task-count {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 100px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.timeline {
+    position: relative;
+    padding-left: 40px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, var(--primary-color), var(--primary-light));
+    border-radius: 1.5px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -40px;
+    top: 20px;
+    width: 32px;
+    height: 32px;
+    background: var(--background-color);
+    border: 3px solid var(--primary-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    z-index: 1;
+}
+
+.timeline-marker.completed {
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.timeline-marker.failed {
+    border-color: var(--danger-color);
+    color: var(--danger-color);
+}
+
+.timeline-marker.running {
+    border-color: var(--info-color);
+    color: var(--info-color);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.timeline-content {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    padding: 1.75rem;
+    transition: var(--transition);
+}
+
+.timeline-content:hover {
+    transform: translateX(5px);
+    box-shadow: var(--card-hover-shadow);
+    border-color: var(--primary-color);
+}
+
+.timeline-task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.timeline-task-name {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.timeline-task-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    margin: 1rem 0;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.meta-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.meta-value {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* ========== 手风琴优化 ========== */
+
+.task-accordion {
+    margin-top: 1rem;
+}
+
+.accordion-item {
+    background: var(--secondary-color);
+    border: none;
+    border-radius: 0.75rem !important;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+}
+
+.accordion-item:last-child {
+    margin-bottom: 0;
+}
+
+.accordion-header {
+    margin: 0;
+}
+
+.accordion-button {
+    background: transparent;
+    color: var(--text-primary);
+    font-weight: 500;
+    padding: 1rem 1.5rem;
+    border: none;
+    box-shadow: none;
+    transition: var(--transition);
+}
+
+.accordion-button:not(.collapsed) {
+    background: var(--primary-color);
+    color: white;
+}
+
+.accordion-button::after {
+    filter: brightness(0) invert(1);
+    transition: var(--transition);
+}
+
+.accordion-button:not(.collapsed)::after {
+    filter: brightness(0) invert(1);
+}
+
+.accordion-body {
+    padding: 0;
+    background: var(--background-color);
+}
+
+.accordion-body .json-container {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+}
+
+/* ========== 操作按钮区域 ========== */
+
+.action-section {
+    text-align: center;
+    padding: 3rem 0;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    padding: 0.875rem 2rem;
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: var(--transition);
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    min-width: 150px;
+    justify-content: center;
+}
+
+.btn-action-primary {
+    background: var(--success-color);
+    color: white;
+}
+
+.btn-action-primary:hover {
+    background: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn-action-warning {
+    background: var(--warning-color);
+    color: white;
+}
+
+.btn-action-warning:hover {
+    background: #d97706;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(245, 158, 11, 0.3);
+}
+
+.btn-action-outline {
+    background: transparent;
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+}
+
+.btn-action-outline:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: translateY(-2px);
+}
+
+/* ========== Flow信息卡片中的操作按钮优化 ========== */
+
+.info-card .mt-3 {
+    margin-top: 2rem !important;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* 重写默认按钮样式 */
+.info-card .btn {
+    position: relative;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.625rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    min-width: 140px;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+/* 按钮图标动画 */
+.info-card .btn i {
+    transition: transform 0.3s ease;
+    font-size: 1rem;
+}
+
+/* 重新执行/重试按钮 */
+.info-card .btn-outline-warning {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05));
+    color: #d97706;
+    border-color: #f59e0b;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.1);
+}
+
+.info-card .btn-outline-warning:hover {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    border-color: #f59e0b;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.25);
+}
+
+.info-card .btn-outline-warning:hover i {
+    transform: rotate(180deg);
+}
+
+.info-card .btn-outline-warning:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+/* 查看元数据按钮 */
+.info-card .btn-outline-primary {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(99, 102, 241, 0.05));
+    color: #6366f1;
+    border-color: #6366f1;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.info-card .btn-outline-primary:hover {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    border-color: #6366f1;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.25);
+}
+
+.info-card .btn-outline-primary:hover i {
+    transform: scale(1.1);
+}
+
+.info-card .btn-outline-primary:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+/* 查看执行日志按钮 */
+.info-card .btn-outline-info {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.05));
+    color: #3b82f6;
+    border-color: #3b82f6;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.info-card .btn-outline-info:hover {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.25);
+}
+
+.info-card .btn-outline-info:hover i {
+    transform: translateY(-2px);
+}
+
+.info-card .btn-outline-info:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* 徽章样式优化 */
+.info-card .btn .badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* 按钮组悬停效果 */
+.info-card .btn-group-wrapper {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    position: relative;
+}
+
+/* 加载状态按钮 */
+.info-card .btn.loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.info-card .btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 8px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 按钮悬停时的波纹效果 */
+.info-card .btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.info-card .btn:hover::before {
+    width: 300px;
+    height: 300px;
+    opacity: 0;
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+    .info-card .mt-3 {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .info-card .btn {
+        width: 100%;
+        min-width: auto;
+    }
+
+    .info-card .btn .badge {
+        position: static;
+        margin-left: 0.5rem;
+        animation: none;
+    }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+    .info-card .btn-outline-warning {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.08));
+    }
+
+    .info-card .btn-outline-primary {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.08));
+    }
+
+    .info-card .btn-outline-info {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.08));
+    }
+
+    .info-card .btn .badge {
+        border-color: var(--background-color);
+    }
+}
+
+/* ========== 状态徽章优化 ========== */
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.status-badge i {
+    font-size: 0.875rem;
+}
+
+.status-badge.pending {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+    color: white;
+}
+
+.status-badge.running {
+    background: linear-gradient(135deg, var(--info-color), #1d4ed8);
+    color: white;
+    position: relative;
+}
+
+.status-badge.running::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -4px;
+    width: 4px;
+    height: 100%;
+    background: var(--info-color);
+    animation: pulse-left 2s ease-in-out infinite;
+}
+
+.status-badge.completed {
+    background: linear-gradient(135deg, var(--success-color), #059669);
+    color: white;
+}
+
+.status-badge.failed {
+    background: linear-gradient(135deg, var(--danger-color), #dc2626);
+    color: white;
+}
+
+.status-badge.lg {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+}
+
+/* ========== 动画效果 ========== */
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+    }
+}
+
+@keyframes pulse-left {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========== 响应式设计 ========== */
+
+@media (max-width: 1024px) {
+    .detail-container {
+        padding: 0 1rem;
+    }
+
+    .flow-info-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+    }
+
+    .timeline-task-meta {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    :root {
+        --border-radius: 0.75rem;
+    }
+
+    .info-card,
+    .data-card,
+    .timeline-container {
+        padding: 1.5rem;
+    }
+
+    .flow-info-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        gap: 1rem;
+    }
+
+    .timeline-task-meta {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .btn-action {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .detail-container {
+        padding: 0 0.75rem;
+    }
+
+    .info-card,
+    .data-card,
+    .timeline-container {
+        padding: 1rem;
+    }
+
+    .json-container {
+        padding: 1rem;
+        font-size: 0.8rem;
+    }
+}
+
+/* ========== 深色模式支持 ========== */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --text-primary: #f9fafb;
+        --text-secondary: #d1d5db;
+        --text-tertiary: #9ca3af;
+        --border-color: #374151;
+        --background-color: #1f2937;
+        --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+        --secondary-color: #374151;
+    }
+
+    .content-wrapper {
+        background: linear-gradient(to bottom, #111827, #1f2937);
+    }
+
+    .json-container {
+        background: #111827;
+        border-color: var(--border-color);
+    }
+
+    .timeline-content:hover {
+        background: rgba(99, 102, 241, 0.05);
+    }
+
+    .accordion-body {
+        background: var(--secondary-color);
+    }
+}
+
+/* ========== 打印优化 ========== */
+
+@media print {
+    .detail-actions,
+    .btn-copy,
+    .action-section {
+        display: none !important;
+    }
+
+    .info-card,
+    .data-card,
+    .timeline-container {
+        break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #000 !important;
+        margin-bottom: 1rem;
+        padding: 1rem !important;
+    }
+
+    .timeline::before {
+        background: #000 !important;
+    }
+
+    .timeline-marker {
+        border-color: #000 !important;
+        background: white !important;
+    }
+}

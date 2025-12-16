@@ -1,0 +1,1103 @@
+{% extends "base.html" %}
+
+{% block title %}Flow列表 - Flowy管理系统{% endblock %}
+
+{% set breadcrumb_items = [
+    {'title': 'Flow列表', 'url': None, 'icon': 'bi-list-ul'}
+] %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/flows-modern.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-fluid">
+  
+        <!-- 搜索区域 -->
+        <div class="search-section">
+            <div class="search-header">
+                <h3 class="search-title">
+                    <i class="bi bi-search"></i>
+                    搜索Flow
+                </h3>
+                <div class="search-header-controls">
+                    <!-- 自动刷新开关 -->
+                    <div class="auto-refresh-control">
+                        <label class="auto-refresh-switch">
+                            <input type="checkbox" id="autoRefreshToggle">
+                            <span class="auto-refresh-slider"></span>
+                        </label>
+                        <span class="auto-refresh-label">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            自动刷新
+                        </span>
+                        <span class="auto-refresh-status" id="autoRefreshStatus"></span>
+                    </div>
+                    <button class="search-toggle" onclick="toggleSearch()">
+                        <i class="bi bi-chevron-up" id="searchToggleIcon"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="searchContent">
+                <form method="GET" action="{{ url_for('flows.list_flows') }}" class="search-form">
+                    <div class="search-group">
+                        <label class="search-label">
+                            <i class="bi bi-type"></i>
+                            搜索关键词
+                        </label>
+                        <input type="text" class="search-input" id="search" name="search"
+                               value="{{ search or '' }}" placeholder="输入Flow名称或描述">
+                    </div>
+                    <div class="search-actions">
+                        <button type="submit" class="btn-search btn-search-primary">
+                            <i class="bi bi-search"></i>
+                            搜索
+                        </button>
+                        {% if search %}
+                            <a href="{{ url_for('flows.list_flows') }}" class="btn-search btn-search-secondary">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                清除
+                            </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+  
+    <!-- Flow列表 -->
+        {% if flows %}
+        <div class="table-section animate-fade-in">
+            <div class="view-switcher">
+                <div class="view-toggle-group">
+                    <button class="view-toggle-btn active">
+                        <i class="bi bi-list-columns"></i>
+                        列表视图
+                    </button>
+                </div>
+                <div class="table-actions">
+                    <span class="table-info">显示 {{ flows|length }} 个Flow</span>
+                </div>
+            </div>
+
+            <table class="modern-table">
+                <thead>
+                    <tr>
+                        <th>Flow信息</th>
+                        <th>描述</th>
+                        <th>总执行次数</th>
+                        <th>成功率</th>
+                        <th>最近状态</th>
+                        <th>最近执行</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in flows %}
+                    {% set flow = item.flow %}
+                    {% set stats = item.stats %}
+                    <tr>
+                        <td>
+                            <div class="flow-cell">
+                                <div class="flow-details">
+                                    <div class="flow-name">{{ flow.name }}</div>
+                                    <span class="flow-id">{{ flow.id }}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="flow-description">{{ flow.description or '暂无描述' }}</span>
+                        </td>
+                        <td>
+                            <span class="execution-count">
+                                <i class="bi bi-bar-chart"></i>
+                                {{ stats.total_count }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if stats.total_count > 0 %}
+                                <div class="success-rate-container">
+                                    <div class="success-rate-bar">
+                                        <div class="success-rate-fill" style="width: {{ stats.success_rate }}%"></div>
+                                    </div>
+                                    <div class="success-rate-text">{{ stats.success_rate }}%</div>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats.latest_status %}
+                                <div class="status-badge {{ stats.latest_status }}">
+                                    <i class="bi bi-{% if stats.latest_status == 'pending' %}clock{% elif stats.latest_status == 'running' %}arrow-repeat{% elif stats.latest_status == 'completed' %}check-circle{% elif stats.latest_status == 'failed' %}x-circle{% else %}question-circle{% endif %}"></i>
+                                    {{ '等待中' if stats.latest_status == 'pending' else ('运行中' if stats.latest_status == 'running' else ('已完成' if stats.latest_status == 'completed' else ('失败' if stats.latest_status == 'failed' else stats.latest_status))) }}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">从未执行</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats.latest_execution %}
+                                <div class="time-cell">
+                                    <div class="time-primary">{{ stats.latest_execution|datetime }}</div>
+                                    <div class="time-secondary">{{ stats.latest_execution|time_ago }}</div>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-group">
+                                <a href="{{ url_for('flows.flow_detail', flow_id=flow.id) }}"
+                                   class="action-btn btn-view" data-tooltip="查看详情">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('flows.flow_history', flow_id=flow.id) }}"
+                                   class="action-btn btn-history" data-tooltip="查看历史">
+                                    <i class="bi bi-clock-history"></i>
+                                </a>
+                                <button type="button" class="action-btn btn-trigger"
+                                        onclick="triggerFlow('{{ flow.id }}')" data-tooltip="手动触发">
+                                    <i class="bi bi-play-circle"></i>
+                                </button>
+                                <button type="button" class="action-btn btn-schedule"
+                                        onclick="viewTriggers('{{ flow.id }}')" data-tooltip="查看触发器">
+                                    <i class="bi bi-alarm"></i>
+                                </button>
+                                <button type="button" class="action-btn btn-add-trigger"
+                                        onclick="createTrigger('{{ flow.id }}')" data-tooltip="新增触发器">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+      <!-- 分页 -->
+        {% from 'components/pagination.html' import pagination %}
+        <div class="pagination-wrapper">
+            <div class="pagination-info">
+                显示第 {{ (current_page - 1) * 30 + 1 }} - {{ (current_page * 30 if current_page * 30 < flows|length else flows|length) }} 条，共 {{ flows|length }} 个Flow
+            </div>
+            {{ pagination(current_page, total_pages, 'flows.list_flows', search=search) }}
+        </div>
+
+        {% else %}
+        <!-- 空状态 -->
+        <div class="empty-state animate-fade-in">
+            <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3>
+                {% if search %}
+                    没有找到匹配的Flow
+                {% else %}
+                    暂无Flow
+                {% endif %}
+            </h3>
+            <p>
+                {% if search %}
+                    请尝试其他搜索关键词，或清除搜索条件查看所有Flow
+                {% else %}
+                    请先创建并执行Flow，它们将显示在这里
+                {% endif %}
+            </p>
+            <div class="empty-state-actions">
+                {% if search %}
+                    <a href="{{ url_for('flows.list_flows') }}" class="btn-search btn-search-primary">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        清除搜索
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 参数输入模态框 -->
+<div class="modal fade" id="triggerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-play-circle"></i>
+                    触发Flow执行
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="flowId" class="form-label">Flow ID</label>
+                    <input type="text" class="form-control" id="flowId" readonly>
+                </div>
+
+                <div class="mb-3">
+                    <label for="flowParams" class="form-label">
+                        <i class="bi bi-code-slash"></i>
+                        执行参数 (JSON格式)
+                    </label>
+                    <textarea class="form-control font-monospace" id="flowParams" rows="8"
+                              placeholder='输入JSON格式的参数，例如：
+
+【完整参数格式】
+{
+  "args": ["参数1", "参数2"],
+  "kwargs": {
+    "key1": "value1",
+    "key2": "value2"
+  }
+}
+
+【单个对象参数】（适用于data_processing等工作流）
+{
+  "items": [1, 2, 3, 4, 5],
+  "metadata": {"source": "test"}
+}
+
+【简单参数】
+"简单字符串参数"
+
+或者数字：12345'></textarea>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>参数说明：</strong>
+                    <ul class="mb-0 mt-2">
+                        <li><strong>完整格式</strong>: <code>{"args": [...], "kwargs": {...}}</code> - 明确指定位置和关键字参数</li>
+                        <li><strong>对象格式</strong>: 直接传入JSON对象，作为第一个位置参数（适用于数据处理类工作流）</li>
+                        <li><strong>简单格式</strong>: 字符串、数字等简单值，作为单个位置参数</li>
+                        <li><strong>留空</strong>: 不传递任何参数</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i>
+                    取消
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmTrigger">
+                    <i class="bi bi-play-circle"></i>
+                    确认执行
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 查看触发器列表模态框 -->
+<div class="modal fade" id="triggersListModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-clock-history"></i>
+                    定时触发器列表
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="triggersListContent">
+                    <div class="text-center" style="padding: 2rem;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-3">加载触发器列表...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i>
+                    关闭
+                </button>
+                <button type="button" class="btn btn-success" onclick="createTriggerFromList()">
+                    <i class="bi bi-plus-circle"></i>
+                    新增触发器
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建/编辑触发器模态框 -->
+<div class="modal fade" id="createTriggerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createTriggerModalTitle">
+                    <i class="bi bi-plus-circle"></i>
+                    <span id="triggerModalTitleText">创建触发器</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createTriggerForm">
+                    <input type="hidden" id="triggerFlowId" value="">
+                    <input type="hidden" id="editTriggerId" value="">
+                    
+                    <!-- 触发器名称 -->
+                    <div class="mb-3">
+                        <label for="triggerName" class="form-label">
+                            <i class="bi bi-tag"></i> 触发器名称 <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="triggerName" required 
+                               placeholder="例如: 每日数据同步">
+                        <div class="invalid-feedback">请输入触发器名称</div>
+                    </div>
+
+                    <!-- 触发器描述 -->
+                    <div class="mb-3">
+                        <label for="triggerDescription" class="form-label">
+                            <i class="bi bi-file-text"></i> 描述
+                        </label>
+                        <textarea class="form-control" id="triggerDescription" rows="2" 
+                                  placeholder="描述触发器的用途"></textarea>
+                    </div>
+
+                    <!-- Cron表达式 -->
+                    <div class="mb-3">
+                        <label for="triggerCron" class="form-label">
+                            <i class="bi bi-clock"></i> Cron表达式 <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="triggerCron" required 
+                                   placeholder="例如: 0 0 * * *">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" 
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                常用模板
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpr('0 0 * * *')">每天午夜 (0 0 * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpr('0 9 * * *')">每天上午9点 (0 9 * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpr('0 */6 * * *')">每6小时 (0 */6 * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpr('*/30 * * * *')">每30分钟 (*/30 * * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpr('0 9 * * 1')">每周一上午9点 (0 9 * * 1)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpr('0 9 * * 1-5')">工作日上午9点 (0 9 * * 1-5)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpr('0 0 1 * *')">每月1号午夜 (0 0 1 * *)</a></li>
+                            </ul>
+                        </div>
+                        <div class="form-text">
+                            Cron表达式格式: 分 时 日 月 周 (例如: 0 0 * * * 表示每天午夜执行)
+                        </div>
+                        <div class="invalid-feedback">请输入有效的Cron表达式</div>
+                    </div>
+
+                    <!-- 触发参数 -->
+                    <div class="mb-3">
+                        <label for="triggerParams" class="form-label">
+                            <i class="bi bi-braces"></i> 触发参数 (JSON格式)
+                        </label>
+                        <textarea class="form-control font-monospace" id="triggerParams" rows="6" 
+                                  placeholder='{
+    "param1": "value1",
+    "param2": "value2"
+}'></textarea>
+                        <div class="form-text">
+                            执行工作流时传入的参数，JSON格式。留空表示不传递参数。
+                        </div>
+                        <div class="invalid-feedback">请输入有效的JSON格式</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i>
+                    取消
+                </button>
+                <button type="button" class="btn btn-success" id="saveTriggerBtn" onclick="saveTriggerFromList()">
+                    <i class="bi bi-check-circle"></i>
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 搜索展开/收起
+function toggleSearch() {
+    const content = document.getElementById('searchContent');
+    const icon = document.getElementById('searchToggleIcon');
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.className = 'bi bi-chevron-up';
+    } else {
+        content.style.display = 'none';
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+// 触发Flow执行
+function triggerFlow(flowId) {
+    // 显示参数输入对话框
+    showTriggerModal(flowId);
+}
+
+// 查看触发器列表
+function viewTriggers(flowId) {
+    // 保存当前flow ID
+    window.currentFlowId = flowId;
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('triggersListModal'));
+    modal.show();
+    
+    // 加载触发器列表
+    loadTriggersForFlow(flowId);
+}
+
+// 加载指定Flow的触发器列表
+function loadTriggersForFlow(flowId) {
+    const content = document.getElementById('triggersListContent');
+    
+    fetch(`/api/flows/${flowId}/triggers`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.data && data.data.length > 0) {
+                    renderTriggersList(data.data);
+                } else {
+                    content.innerHTML = `
+                        <div class="text-center" style="padding: 3rem;">
+                            <i class="bi bi-clock-history" style="font-size: 3rem; color: var(--gray-300);"></i>
+                            <h5 class="mt-3">暂无定时触发器</h5>
+                            <p class="text-muted">点击下方"新增触发器"按钮创建定时任务</p>
+                        </div>
+                    `;
+                }
+            } else {
+                content.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-circle"></i>
+                        加载失败: ${data.error || '未知错误'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-circle"></i>
+                    网络请求失败，请检查连接
+                </div>
+            `;
+        });
+}
+
+// 渲染触发器列表
+function renderTriggersList(triggers) {
+    const content = document.getElementById('triggersListContent');
+    
+    const html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>Cron表达式</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${triggers.map(trigger => `
+                        <tr>
+                            <td>
+                                <div>
+                                    <strong>${escapeHtml(trigger.name)}</strong>
+                                    ${trigger.description ? `<br><small class="text-muted">${escapeHtml(trigger.description)}</small>` : ''}
+                                </div>
+                            </td>
+                            <td><code>${escapeHtml(trigger.cron_expression)}</code></td>
+                            <td>
+                                ${trigger.enabled ? 
+                                    '<span class="badge bg-success"><i class="bi bi-check-circle"></i> 已启用</span>' :
+                                    '<span class="badge bg-secondary"><i class="bi bi-pause-circle"></i> 已禁用</span>'
+                                }
+                            </td>
+                            <td>${formatDateTime(trigger.created_at)}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" onclick="editTriggerFromList(${trigger.id})" title="编辑">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-outline-${trigger.enabled ? 'warning' : 'success'}" 
+                                            onclick="toggleTriggerFromList(${trigger.id}, ${!trigger.enabled})" 
+                                            title="${trigger.enabled ? '禁用' : '启用'}">
+                                        <i class="bi bi-${trigger.enabled ? 'pause-circle' : 'play-circle'}"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="deleteTriggerFromList(${trigger.id})" title="删除">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+// 创建触发器
+function createTrigger(flowId) {
+    // 保存flow ID
+    window.currentFlowId = flowId;
+    
+    // 重置表单
+    document.getElementById('createTriggerForm').reset();
+    document.getElementById('triggerFlowId').value = flowId;
+    document.getElementById('editTriggerId').value = '';
+    document.getElementById('triggerModalTitleText').textContent = '创建触发器';
+    
+    // 移除验证状态
+    document.getElementById('createTriggerForm').classList.remove('was-validated');
+    document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('createTriggerModal'));
+    modal.show();
+}
+
+// 从列表中创建触发器
+function createTriggerFromList() {
+    // 关闭列表模态框
+    const listModal = bootstrap.Modal.getInstance(document.getElementById('triggersListModal'));
+    if (listModal) {
+        listModal.hide();
+    }
+    
+    // 打开创建模态框
+    setTimeout(() => {
+        createTrigger(window.currentFlowId);
+    }, 300);
+}
+
+// 从列表中编辑触发器
+function editTriggerFromList(triggerId) {
+    fetch(`/api/triggers/${triggerId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data) {
+                const trigger = data.data;
+                
+                // 填充表单
+                document.getElementById('triggerFlowId').value = trigger.flow_id;
+                document.getElementById('editTriggerId').value = trigger.id;
+                document.getElementById('triggerName').value = trigger.name;
+                document.getElementById('triggerDescription').value = trigger.description || '';
+                document.getElementById('triggerCron').value = trigger.cron_expression;
+                
+                // 格式化JSON参数
+                if (trigger.trigger_params) {
+                    try {
+                        const params = typeof trigger.trigger_params === 'string' ? 
+                            JSON.parse(trigger.trigger_params) : trigger.trigger_params;
+                        document.getElementById('triggerParams').value = JSON.stringify(params, null, 2);
+                    } catch (e) {
+                        document.getElementById('triggerParams').value = trigger.trigger_params;
+                    }
+                } else {
+                    document.getElementById('triggerParams').value = '';
+                }
+                
+                // 更新标题
+                document.getElementById('triggerModalTitleText').textContent = '编辑触发器';
+                
+                // 关闭列表模态框
+                const listModal = bootstrap.Modal.getInstance(document.getElementById('triggersListModal'));
+                if (listModal) {
+                    listModal.hide();
+                }
+                
+                // 显示编辑模态框
+                setTimeout(() => {
+                    const modal = new bootstrap.Modal(document.getElementById('createTriggerModal'));
+                    modal.show();
+                }, 300);
+            } else {
+                showNotification('加载触发器数据失败', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('网络请求失败', 'error');
+        });
+}
+
+// 保存触发器
+function saveTriggerFromList() {
+    const form = document.getElementById('createTriggerForm');
+    const triggerId = document.getElementById('editTriggerId').value;
+    const flowId = document.getElementById('triggerFlowId').value;
+    const name = document.getElementById('triggerName').value.trim();
+    const description = document.getElementById('triggerDescription').value.trim();
+    const cronExpression = document.getElementById('triggerCron').value.trim();
+    const paramsText = document.getElementById('triggerParams').value.trim();
+    
+    // 客户端验证
+    if (!name) {
+        document.getElementById('triggerName').classList.add('is-invalid');
+        showNotification('请输入触发器名称', 'error');
+        return;
+    }
+    
+    if (!cronExpression) {
+        document.getElementById('triggerCron').classList.add('is-invalid');
+        showNotification('请输入Cron表达式', 'error');
+        return;
+    }
+    
+    // 验证JSON格式
+    let triggerParams = {};
+    if (paramsText) {
+        try {
+            triggerParams = JSON.parse(paramsText);
+        } catch (e) {
+            document.getElementById('triggerParams').classList.add('is-invalid');
+            showNotification('触发参数格式错误，请输入有效的JSON格式', 'error');
+            return;
+        }
+    }
+    
+    // 移除验证错误状态
+    document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    
+    // 禁用保存按钮
+    const saveBtn = document.getElementById('saveTriggerBtn');
+    const originalContent = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> 保存中...';
+    saveBtn.disabled = true;
+    
+    // 构建请求数据
+    const requestData = {
+        flow_id: flowId,
+        name: name,
+        description: description,
+        cron_expression: cronExpression,
+        trigger_params: triggerParams
+    };
+    
+    // 判断是创建还是更新
+    const url = triggerId ? `/api/triggers/${triggerId}` : '/api/triggers';
+    const method = triggerId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(triggerId ? '触发器更新成功！' : '触发器创建成功！', 'success');
+            
+            // 关闭创建模态框
+            const createModal = bootstrap.Modal.getInstance(document.getElementById('createTriggerModal'));
+            if (createModal) {
+                createModal.hide();
+            }
+            
+            // 重新打开列表模态框并刷新
+            setTimeout(() => {
+                const listModal = new bootstrap.Modal(document.getElementById('triggersListModal'));
+                listModal.show();
+                loadTriggersForFlow(flowId);
+            }, 300);
+        } else {
+            throw new Error(data.error || '保存失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification(error.message || '保存失败，请检查输入', 'error');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        saveBtn.innerHTML = originalContent;
+        saveBtn.disabled = false;
+    });
+}
+
+// 从列表中切换触发器状态
+function toggleTriggerFromList(triggerId, enabled) {
+    fetch(`/api/triggers/${triggerId}/toggle`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: enabled })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(enabled ? '触发器已启用' : '触发器已禁用', 'success');
+            // 重新加载触发器列表
+            loadTriggersForFlow(window.currentFlowId);
+        } else {
+            throw new Error(data.error || '操作失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification(error.message || '操作失败', 'error');
+    });
+}
+
+// 从列表中删除触发器
+function deleteTriggerFromList(triggerId) {
+    if (!confirm('确定要删除这个触发器吗？删除后将无法恢复。')) {
+        return;
+    }
+    
+    fetch(`/api/triggers/${triggerId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('触发器删除成功！', 'success');
+            // 重新加载触发器列表
+            loadTriggersForFlow(window.currentFlowId);
+        } else {
+            throw new Error(data.error || '删除失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification(error.message || '删除失败', 'error');
+    });
+}
+
+// 设置Cron表达式
+function setCronExpr(expression) {
+    document.getElementById('triggerCron').value = expression;
+    event.preventDefault();
+}
+
+// HTML转义函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 格式化日期时间
+function formatDateTime(dateTime) {
+    if (!dateTime) return '-';
+    const date = new Date(dateTime);
+    return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// 显示触发参数输入对话框
+function showTriggerModal(flowId) {
+    // 设置Flow ID
+    document.getElementById('flowId').value = flowId;
+
+    // 清空参数输入框
+    document.getElementById('flowParams').value = '';
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('triggerModal'));
+    modal.show();
+
+    // 聚焦到参数输入框
+    setTimeout(() => {
+        document.getElementById('flowParams').focus();
+    }, 500);
+}
+
+// 确认触发Flow
+function confirmTriggerFlow() {
+    const flowId = document.getElementById('flowId').value;
+    const paramsText = document.getElementById('flowParams').value.trim();
+
+    // 解析参数
+    let params = {};
+
+    if (paramsText) {
+        try {
+            // 尝试解析为JSON
+            params = JSON.parse(paramsText);
+        } catch (e) {
+            // 如果不是JSON格式，作为简单字符串处理
+            params = paramsText;
+        }
+    }
+
+    // 关闭模态框
+    const modal = bootstrap.Modal.getInstance(document.getElementById('triggerModal'));
+    modal.hide();
+
+    // 显示加载状态
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.className = 'loading-overlay';
+    loadingOverlay.innerHTML = '<div class="loading-spinner"></div>';
+    document.body.appendChild(loadingOverlay);
+
+    // 发送请求
+    fetch(`/api/flows/${flowId}/run`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(params)
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.body.removeChild(loadingOverlay);
+        if (data.success) {
+            showNotification('Flow已成功触发执行！', 'success');
+            // 延迟刷新页面以显示新的运行状态
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showNotification('触发失败: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        document.body.removeChild(loadingOverlay);
+        console.error('Error:', error);
+        showNotification('请求失败，请检查网络连接', 'error');
+    });
+}
+
+// 验证JSON格式
+function validateJSON(text) {
+    try {
+        JSON.parse(text);
+        return { valid: true, error: null };
+    } catch (e) {
+        return { valid: false, error: e.message };
+    }
+}
+
+// 显示通知
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        background: ${type === 'success' ? 'var(--success-color)' : 'var(--danger-color)'};
+        color: white;
+        border-radius: 0.75rem;
+        box-shadow: var(--card-hover-shadow);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease-out;
+    `;
+
+    document.body.appendChild(notification);
+
+    // 自动移除通知
+    setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
+}
+
+// 自动刷新控制
+let refreshInterval = null;
+let isAutoRefreshEnabled = false;
+
+function toggleAutoRefresh() {
+    const toggle = document.getElementById('autoRefreshToggle');
+    const status = document.getElementById('autoRefreshStatus');
+
+    if (toggle.checked) {
+        startAutoRefresh();
+    } else {
+        stopAutoRefresh();
+    }
+}
+
+function startAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+
+    isAutoRefreshEnabled = true;
+    updateAutoRefreshStatus();
+
+    refreshInterval = setInterval(() => {
+        // 检查是否还有运行中的Flow（可选检查）
+        fetch('/api/flows/running-count')
+            .then(response => response.json())
+            .then(data => {
+                updateAutoRefreshStatus(data.count);
+                // 即使没有运行中的Flow也继续刷新（用户手动控制）
+            })
+            .catch(error => {
+                console.error('刷新失败:', error);
+                updateAutoRefreshStatus(null, true);
+            });
+
+        // 刷新页面
+        location.reload();
+    }, 5000);
+}
+
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    isAutoRefreshEnabled = false;
+    updateAutoRefreshStatus();
+}
+
+function updateAutoRefreshStatus(runningCount = null, hasError = false) {
+    const status = document.getElementById('autoRefreshStatus');
+    const toggle = document.getElementById('autoRefreshToggle');
+
+    if (hasError) {
+        status.textContent = ' (连接错误)';
+        status.className = 'auto-refresh-status error';
+    } else if (isAutoRefreshEnabled) {
+        if (runningCount !== null) {
+            status.textContent = ` (${runningCount > 0 ? runningCount + '个运行中' : '无运行中'})`;
+            status.className = 'auto-refresh-status active';
+        } else {
+            status.textContent = ' (已启用)';
+            status.className = 'auto-refresh-status active';
+        }
+    } else {
+        status.textContent = ' (已停止)';
+        status.className = 'auto-refresh-status inactive';
+    }
+}
+
+// 页面加载完成后执行
+document.addEventListener('DOMContentLoaded', function() {
+    // 添加加载动画
+    const sections = document.querySelectorAll('.animate-fade-in');
+    sections.forEach((section, index) => {
+        section.style.animationDelay = `${index * 0.1}s`;
+    });
+
+    // 自动隐藏Flash消息
+    setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(alert => {
+            alert.style.transition = 'opacity 0.5s';
+            alert.style.opacity = '0';
+            setTimeout(() => alert.remove(), 500);
+        });
+    }, 5000);
+
+    // 初始化自动刷新
+    const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+    if (autoRefreshToggle) {
+        autoRefreshToggle.addEventListener('change', toggleAutoRefresh);
+        updateAutoRefreshStatus();
+    }
+
+    // 初始化触发按钮
+    const confirmTriggerBtn = document.getElementById('confirmTrigger');
+    if (confirmTriggerBtn) {
+        confirmTriggerBtn.addEventListener('click', confirmTriggerFlow);
+    }
+
+    // 为参数输入框添加实时验证
+    const flowParamsInput = document.getElementById('flowParams');
+    if (flowParamsInput) {
+        flowParamsInput.addEventListener('input', function() {
+            const text = this.value.trim();
+            if (text) {
+                const validation = validateJSON(text);
+                if (!validation.valid) {
+                    this.classList.add('is-invalid');
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+    }
+});
+
+// 键盘快捷键
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + K: 快速搜索
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('search').focus();
+    }
+
+    // Esc: 关闭搜索
+    if (e.key === 'Escape') {
+        const content = document.getElementById('searchContent');
+        if (content.style.display !== 'none') {
+            toggleSearch();
+        }
+    }
+});
+
+// 添加通知动画样式
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOutRight {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+
+    .notification-content {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

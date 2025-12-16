@@ -1,0 +1,78 @@
+.json-viewer {
+    background-color: #272822;
+    color: #fff;
+    font-family: "Consolas", "Arial", "Monaco", "Osaka", "serif;
+    font-size: 14px;
+    padding: 1em 2em;
+    border-radius: 4px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.json-viewer ul.json-dict,
+.json-viewer ol.json-array {
+    list-style-type: none;
+    margin: 0 0 0 1px;
+    border-left: 1px dotted #666;
+    padding-left: 2em;
+}
+
+.json-viewer .json-key {
+    color: #7bdcfe;
+}
+
+.json-viewer .json-value {
+    color: #ce9178;
+}
+
+.json-viewer .json-literal {
+    color: #b5cea8;
+}
+
+.json-viewer a.json-toggle {
+    position: relative;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.json-viewer a.json-toggle:focus {
+    outline: none;
+}
+
+.json-viewer a.json-toggle:before {
+    font-size: 1.1em;
+    color: #666;
+    content: "\25BC";
+    position: absolute;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    line-height: 1em;
+    left: -1.2em;
+}
+
+.json-viewer a.json-toggle:hover:before {
+    color: #aaa;
+}
+
+.json-viewer a.json-toggle.collapsed:before {
+    content: "\25B6";
+}
+
+.json-viewer a.json-placeholder {
+    color: #aaa;
+    padding: 0 1em;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.json-viewer a.json-placeholder:hover {
+    text-decoration: underline;
+}
+
+.json-viewer .hidden {
+    display: none;
+}

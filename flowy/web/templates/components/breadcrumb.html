@@ -1,0 +1,50 @@
+<!-- 面包屑导航组件 -->
+<nav aria-label="breadcrumb" style="--bs-breadcrumb-divider: '/';">
+    <ol class="breadcrumb">
+        {% for item in breadcrumb_items %}
+            {% if loop.last %}
+                <li class="breadcrumb-item active" aria-current="page">{{ item.title }}</li>
+            {% else %}
+                <li class="breadcrumb-item">
+                    {% if item.url %}
+                        <a href="{{ item.url }}" {% if item.icon %}class="text-decoration-none"{% endif %}>
+                            {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.title }}
+                        </a>
+                    {% else %}
+                        {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.title }}
+                    {% endif %}
+                </li>
+            {% endif %}
+        {% endfor %}
+    </ol>
+</nav>
+
+<style>
+.breadcrumb {
+    background-color: transparent;
+    padding: 0.75rem 0;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: var(--bs-breadcrumb-divider);
+    color: #6c757d;
+    font-weight: bold;
+}
+
+.breadcrumb-item.active {
+    color: #495057;
+    font-weight: 500;
+}
+
+.breadcrumb-item a {
+    color: #0d6efd;
+    transition: color 0.2s;
+}
+
+.breadcrumb-item a:hover {
+    color: #0a58ca;
+    text-decoration: underline !important;
+}
+</style>

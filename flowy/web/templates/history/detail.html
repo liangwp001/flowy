@@ -1,0 +1,1194 @@
+{% extends "base.html" %}
+
+{% block title %}执行历史详情 #{{ flow_history.id }} - Flowy 工作流管理系统{% endblock %}
+
+{% set breadcrumb_items = [
+    {'title': 'Flowy管理系统', 'url': url_for('flows.list_flows'), 'icon': 'bi-diagram-3'},
+    {'title': 'Flow列表', 'url': url_for('flows.list_flows'), 'icon': 'bi-list-ul'},
+    {'title': flow.name if flow else flow_history.flow_id, 'url': url_for('flows.flow_detail', flow_id=flow_history.flow_id), 'icon': 'bi-info-circle'},
+    {'title': '执行历史', 'url': url_for('flows.flow_history', flow_id=flow_history.flow_id), 'icon': 'bi-clock-history'},
+    {'title': '执行详情 #' + flow_history.id|string, 'url': None, 'icon': 'bi-info-circle'}
+] %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/history-detail-modern.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/json-viewer.css') }}">
+<style>
+/* 临时样式用于额外的微调 */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="detail-container">
+
+        
+        <!-- Flow基本信息 -->
+        <div class="info-card animate-fade-in">
+            <div class="info-card-header">
+                <div class="info-card-icon flow">
+                    <i class="bi bi-diagram-3"></i>
+                </div>
+                <h2 class="info-card-title">Flow信息</h2>
+            </div>
+            <div class="flow-info-grid">
+                <!-- 第一行 -->
+                <div class="info-item">
+                    <div class="info-label">Flow ID</div>
+                    <div class="info-value">
+                        <span class="flow-id-badge">
+                            <i class="bi bi-hash"></i>
+                            {{ flow_history.flow_id }}
+                        </span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">执行状态</div>
+                    <div class="info-value">
+                        <div class="status-badge {{ flow_history.status }} lg">
+                            <i class="bi bi-{% if flow_history.status == 'pending' %}clock{% elif flow_history.status == 'running' %}arrow-repeat{% elif flow_history.status == 'completed' %}check-circle{% elif flow_history.status == 'failed' %}x-circle{% else %}question-circle{% endif %}"></i>
+                            {{ '等待中' if flow_history.status == 'pending' else ('运行中' if flow_history.status == 'running' else ('已完成' if flow_history.status == 'completed' else ('失败' if flow_history.status == 'failed' else flow_history.status))) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">创建时间</div>
+                    <div class="info-value">{{ flow_history.created_at|datetime }}</div>
+                </div>
+
+                <!-- 第二行 -->
+                <div class="info-item">
+                    <div class="info-label">开始时间</div>
+                    <div class="info-value">{{ flow_history.start_time|datetime if flow_history.start_time else '-' }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">结束时间</div>
+                    <div class="info-value">{{ flow_history.end_time|datetime if flow_history.end_time else '-' }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">执行时长</div>
+                    <div class="info-value">
+                        <span class="duration-tag">
+                            <i class="bi bi-clock-history"></i>
+                            {{ flow_history.start_time|duration(flow_history.end_time) }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 快捷操作按钮 -->
+            <div class="mt-3 d-flex gap-2">
+                {% if flow_history.status == 'completed' or flow_history.status == 'failed' %}
+                    <button type="button" class="btn btn-outline-warning" 
+                            onclick="console.log('按钮被点击'); handleRetryButtonClick(event);" 
+                            id="retryButton">
+                        <i class="bi bi-arrow-repeat"></i>
+                        {% if flow_history.status == 'completed' %}
+                            重新执行
+                        {% else %}
+                            重试执行
+                        {% endif %}
+                    </button>
+                {% endif %}
+                <button type="button" class="btn btn-outline-primary" onclick="viewMetadata()">
+                    <i class="bi bi-tags"></i>
+                    查看元数据
+                    {% if flow_history.flow_metadata %}
+                        <span class="badge bg-primary ms-1">有数据</span>
+                    {% endif %}
+                </button>
+                <button type="button" class="btn btn-outline-info" onclick="viewLogs()">
+                    <i class="bi bi-file-text"></i>
+                    查看执行日志
+                </button>
+            </div>
+        </div>
+
+        <!-- 输入输出数据 -->
+        <div class="row animate-fade-in" style="margin-bottom: 2rem;">
+            <div class="col-md-6">
+                <div class="data-card">
+                    <div class="data-card-header">
+                        <h3 class="data-card-title">
+                            <i class="bi bi-arrow-down-circle"></i>
+                            输入数据
+                        </h3>
+                        {% if flow_history.input_data %}
+                            <button type="button" class="btn-copy" onclick="copyToClipboard('input-data', this)">
+                                <i class="bi bi-clipboard"></i>
+                                复制
+                            </button>
+                        {% endif %}
+                    </div>
+                    {% if flow_history.input_data %}
+                        <div class="json-container">
+                            <div class="json-viewer" id="input-data-viewer"></div>
+                        </div>
+                        <!-- 隐藏的原始数据用于复制 -->
+                        <textarea id="input-data" style="display: none;">{{ flow_history.input_data|tojson|safe }}</textarea>
+                    {% else %}
+                        <div class="no-data">
+                            <i class="bi bi-inbox"></i>
+                            无输入数据
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="data-card">
+                    <div class="data-card-header">
+                        <h3 class="data-card-title">
+                            <i class="bi bi-arrow-up-circle"></i>
+                            输出数据
+                        </h3>
+                        {% if flow_history.output_data %}
+                            <button type="button" class="btn-copy" onclick="copyToClipboard('output-data', this)">
+                                <i class="bi bi-clipboard"></i>
+                                复制
+                            </button>
+                        {% endif %}
+                    </div>
+                    {% if flow_history.output_data %}
+                        <div class="json-container">
+                            <div class="json-viewer" id="output-data-viewer"></div>
+                        </div>
+                        <!-- 隐藏的原始数据用于复制 -->
+                        <textarea id="output-data" style="display: none;">{{ flow_history.output_data|tojson|safe }}</textarea>
+                    {% else %}
+                        <div class="no-data">
+                            <i class="bi bi-inbox"></i>
+                            无输出数据
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Task执行历史 -->
+        {% if task_histories %}
+        <div class="timeline-container animate-fade-in">
+            <div class="timeline-header">
+                <h2 class="timeline-title">
+                    <i class="bi bi-list-check"></i>
+                    Task执行详情
+                </h2>
+                <span class="task-count">{{ task_histories|length }} 个任务</span>
+            </div>
+            <div class="timeline">
+                {% for task in task_histories %}
+                <div class="timeline-item" style="animation-delay: {{ loop.index * 0.1 }}s;">
+                    <div class="timeline-marker {{ task.status }}">
+                        {% if task.status == 'completed' %}
+                            <i class="bi bi-check-circle-fill"></i>
+                        {% elif task.status == 'failed' %}
+                            <i class="bi bi-x-circle-fill"></i>
+                        {% elif task.status == 'running' %}
+                            <i class="bi bi-arrow-repeat-fill"></i>
+                        {% else %}
+                            <i class="bi bi-circle-fill"></i>
+                        {% endif %}
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-task-header">
+                            <h3 class="timeline-task-name">{{ task.name }}</h3>
+                            {% from 'components/status_badge.html' import status_badge %}
+                            <div class="status-badge {{ task.status }}">
+                                <i class="bi bi-{% if task.status == 'pending' %}clock{% elif task.status == 'running' %}arrow-repeat{% elif task.status == 'completed' %}check-circle{% elif task.status == 'failed' %}x-circle{% else %}question-circle{% endif %}"></i>
+                                {{ '等待中' if task.status == 'pending' else ('运行中' if task.status == 'running' else ('已完成' if task.status == 'completed' else ('失败' if task.status == 'failed' else task.status))) }}
+                            </div>
+                        </div>
+                        <div class="timeline-task-meta">
+                            <div class="meta-item">
+                                <span class="meta-label">创建时间</span>
+                                <span class="meta-value">{{ task.created_at|datetime }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">开始时间</span>
+                                <span class="meta-value">{{ task.start_time|datetime if task.start_time else '-' }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">结束时间</span>
+                                <span class="meta-value">{{ task.end_time|datetime if task.end_time else '-' }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">执行耗时</span>
+                                <span class="meta-value">
+                                    <i class="bi bi-stopwatch"></i>
+                                    {{ task.start_time|duration(task.end_time) }}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if task.input_data or task.output_data %}
+                        <div class="task-accordion">
+                            <div class="accordion" id="taskAccordion{{ loop.index }}">
+                                {% if task.input_data %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#inputCollapse{{ loop.index }}">
+                                            <i class="bi bi-arrow-down-circle me-2"></i>
+                                            输入数据
+                                        </button>
+                                    </h2>
+                                    <div id="inputCollapse{{ loop.index }}"
+                                         class="accordion-collapse collapse"
+                                         data-bs-parent="#taskAccordion{{ loop.index }}">
+                                        <div class="accordion-body">
+                                            <div class="json-container">
+                                                <div class="json-viewer" id="task-input-{{ loop.index }}"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if task.output_data %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#outputCollapse{{ loop.index }}">
+                                            <i class="bi bi-arrow-up-circle me-2"></i>
+                                            输出数据
+                                        </button>
+                                    </h2>
+                                    <div id="outputCollapse{{ loop.index }}"
+                                         class="accordion-collapse collapse"
+                                         data-bs-parent="#taskAccordion{{ loop.index }}">
+                                        <div class="accordion-body">
+                                            <div class="json-container">
+                                                <div class="json-viewer" id="task-output-{{ loop.index }}"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+
+    </div>
+</div>
+
+<!-- 返回顶部按钮 -->
+<button id="backToTop" class="btn-action btn-action-outline" style="position: fixed; bottom: 2rem; right: 2rem; z-index: 1000; display: none; width: auto; padding: 0.75rem;" onclick="scrollToTop()">
+    <i class="bi bi-arrow-up"></i>
+</button>
+
+<!-- 元数据查看模态框 -->
+<div class="modal fade" id="metadataModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-tags"></i>
+                    元数据
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="metadata-modal-container">
+                    {% if flow_history.flow_metadata %}
+                        <div class="json-container">
+                            <div class="json-viewer" id="metadata-modal-viewer"></div>
+                        </div>
+                        <textarea id="metadata-modal-text" style="display: none;">{{ flow_history.flow_metadata|tojson|safe }}</textarea>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            无元数据
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="copyMetadata()">
+                    <i class="bi bi-clipboard"></i>
+                    复制元数据
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 参数输入模态框 -->
+<div class="modal fade" id="triggerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-play-circle"></i>
+                    触发Flow执行
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="flowId" class="form-label">Flow ID</label>
+                    <input type="text" class="form-control" id="flowId" readonly>
+                </div>
+
+                <div class="mb-3">
+                    <label for="flowParams" class="form-label">
+                        <i class="bi bi-code-slash"></i>
+                        执行参数 (JSON格式)
+                    </label>
+                    <textarea class="form-control font-monospace" id="flowParams" rows="8"
+                              placeholder='输入JSON格式的参数，例如：
+
+【完整参数格式】
+{
+  "args": ["参数1", "参数2"],
+  "kwargs": {
+    "key1": "value1",
+    "key2": "value2"
+  }
+}
+
+【单个对象参数】（适用于data_processing等工作流）
+{
+  "items": [1, 2, 3, 4, 5],
+  "metadata": {"source": "test"}
+}
+
+【简单参数】
+"简单字符串参数"
+
+或者数字：12345'></textarea>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>参数说明：</strong>
+                    <ul class="mb-0 mt-2">
+                        <li><strong>完整格式</strong>: <code>{"args": [...], "kwargs": {...}}</code> - 明确指定位置和关键字参数</li>
+                        <li><strong>对象格式</strong>: 直接传入JSON对象，作为第一个位置参数（适用于数据处理类工作流）</li>
+                        <li><strong>简单格式</strong>: 字符串、数字等简单值，作为单个位置参数</li>
+                        <li><strong>留空</strong>: 不传递任何参数</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i>
+                    取消
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmTrigger">
+                    <i class="bi bi-play-circle"></i>
+                    确认执行
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志查看模态框 -->
+<div class="modal fade" id="logModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-text"></i>
+                    执行日志
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="log-modal-container">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载日志...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="refreshLogs()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    刷新
+                </button>
+                <button type="button" class="btn btn-primary" onclick="copyLogs()">
+                    <i class="bi bi-clipboard"></i>
+                    复制日志
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 加载遮罩（初始隐藏） -->
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/json-viewer.js') }}"></script>
+<script>
+// 全局变量
+let currentLogContent = '';
+let logLoaded = false;
+
+// 查看元数据
+function viewMetadata() {
+    const modal = new bootstrap.Modal(document.getElementById('metadataModal'));
+    modal.show();
+    
+    // 渲染元数据（如果有）
+    {% if flow_history.flow_metadata %}
+    setTimeout(() => {
+        try {
+            // flow_metadata在数据库中存储为JSON字符串
+            // 转义并传递给JavaScript
+            const metadataStr = {{ flow_history.flow_metadata|tojson }};
+            console.log('Metadata string type:', typeof metadataStr);
+            console.log('Metadata string value:', metadataStr);
+            console.log('Metadata string length:', metadataStr ? metadataStr.length : 'null');
+
+            // 确保metadataStr不是undefined或null
+            if (!metadataStr) {
+                throw new Error('metadataStr is null or undefined');
+            }
+
+            // 检查是否是字符串
+            let metadata;
+            if (typeof metadataStr !== 'string') {
+                console.log('Metadata is not a string, type:', typeof metadataStr);
+                metadata = metadataStr; // 已经是对象了
+            } else {
+                // 尝试解析JSON字符串
+                console.log('Attempting to parse JSON string...');
+                metadata = JSON.parse(metadataStr);
+                console.log('Parsed metadata type:', typeof metadata);
+                console.log('Parsed metadata value:', metadata);
+            }
+
+            // 使用JSONViewer渲染
+            const viewer = new JSONViewer({clickableUrls: true});
+            const element = document.getElementById('metadata-modal-viewer');
+            if (element && !element.hasChildNodes()) {
+                viewer.render(element, metadata);
+                console.log('JSONViewer rendered successfully');
+            }
+        } catch (e) {
+            console.error('Failed to parse metadata:', e);
+            console.error('Error name:', e.name);
+            console.error('Error message:', e.message);
+            console.error('Raw metadata from DB:', metadataStr);
+
+            const element = document.getElementById('metadata-modal-viewer');
+            if (element) {
+                element.innerHTML = `
+                    <div style="color: var(--danger-color); padding: 1rem;">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        元数据解析失败
+                        <p>错误: ${e.message}</p>
+                        <details style="margin-top: 1rem;">
+                            <summary>查看原始数据</summary>
+                            <pre style="background: #f5f5f5; padding: 0.5rem; margin-top: 0.5rem; border-radius: 0.25rem; overflow-x: auto; font-size: 0.875rem;">${metadataStr}</pre>
+                        </details>
+                    </div>
+                `;
+            }
+        }
+    }, 100);
+    {% endif %}
+}
+
+// 复制元数据
+function copyMetadata() {
+    const textarea = document.getElementById('metadata-modal-text');
+    if (!textarea) {
+        showToast('没有可复制的元数据', 'warning');
+        return;
+    }
+    
+    const text = textarea.value;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('元数据已复制到剪贴板', 'success');
+    }).catch(err => {
+        console.error('复制失败:', err);
+        showToast('复制失败，请手动复制', 'error');
+    });
+}
+
+// 查看日志
+function viewLogs() {
+    const modal = new bootstrap.Modal(document.getElementById('logModal'));
+    modal.show();
+    
+    // 加载日志内容
+    if (!logLoaded) {
+        loadLogs();
+    }
+}
+
+// 加载日志内容
+function loadLogs() {
+    const container = document.getElementById('log-modal-container');
+    container.innerHTML = `
+        <div class="text-center py-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-2">正在加载日志...</p>
+        </div>
+    `;
+    
+    fetch(`/api/history/{{ flow_history.id }}/logs`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentLogContent = data.data.log_content;
+                logLoaded = true;
+                
+                if (currentLogContent.trim()) {
+                    // 显示日志内容
+                    container.innerHTML = `
+                        <div style="background: #1e1e1e; color: #d4d4d4; padding: 1.5rem; border-radius: 0.5rem; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.875rem; line-height: 1.6; max-height: 600px; overflow-y: auto;">
+                            <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(currentLogContent)}</pre>
+                        </div>
+                        <div class="mt-3 text-muted" style="font-size: 0.875rem;">
+                            <i class="bi bi-info-circle"></i>
+                            日志文件: ${data.data.log_file}
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            日志文件为空或尚未生成日志内容
+                        </div>
+                    `;
+                }
+            } else {
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        ${data.error || '无法加载日志文件'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('加载日志失败:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-x-circle"></i>
+                    加载日志失败: ${error.message}
+                </div>
+            `;
+        });
+}
+
+// 刷新日志
+function refreshLogs() {
+    logLoaded = false;
+    loadLogs();
+    showToast('日志已刷新', 'success');
+}
+
+// 复制日志
+function copyLogs() {
+    if (!currentLogContent) {
+        showToast('没有可复制的日志内容', 'warning');
+        return;
+    }
+    
+    navigator.clipboard.writeText(currentLogContent).then(() => {
+        showToast('日志已复制到剪贴板', 'success');
+    }).catch(err => {
+        console.error('复制失败:', err);
+        showToast('复制失败，请手动复制', 'error');
+    });
+}
+
+// HTML转义函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 复制到剪贴板
+function copyToClipboard(dataType, buttonElement) {
+    let textToCopy = '';
+    
+    try {
+        // 根据数据类型获取对应的数据
+        if (dataType === 'input-data') {
+            {% if flow_history.input_data %}
+            let inputData = {{ flow_history.input_data|tojson }};
+            if (typeof inputData === 'string') {
+                try {
+                    inputData = JSON.parse(inputData);
+                } catch (e) {
+                    // 如果解析失败，使用原始字符串
+                }
+            }
+            textToCopy = JSON.stringify(inputData, null, 2);
+            {% else %}
+            textToCopy = '{}';
+            {% endif %}
+        } else if (dataType === 'output-data') {
+            {% if flow_history.output_data %}
+            let outputData = {{ flow_history.output_data|tojson }};
+            if (typeof outputData === 'string') {
+                try {
+                    outputData = JSON.parse(outputData);
+                } catch (e) {
+                    // 如果解析失败，使用原始字符串
+                }
+            }
+            textToCopy = JSON.stringify(outputData, null, 2);
+            {% else %}
+            textToCopy = '{}';
+            {% endif %}
+        } else {
+            throw new Error('未知的数据类型: ' + dataType);
+        }
+
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            // 显示复制成功提示
+            if (buttonElement) {
+                const originalText = buttonElement.innerHTML;
+                buttonElement.innerHTML = '<i class="bi bi-check"></i> 已复制';
+                buttonElement.classList.add('copied');
+
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalText;
+                    buttonElement.classList.remove('copied');
+                }, 2000);
+            }
+            showToast('数据已复制到剪贴板', 'success');
+        }).catch(err => {
+            console.error('复制失败:', err);
+            showToast('复制失败，请手动复制', 'error');
+        });
+    } catch (error) {
+        console.error('准备复制数据时出错:', error);
+        showToast('复制失败：数据处理错误', 'error');
+    }
+}
+
+// 测试函数
+function testRetryButton() {
+    console.log('测试重试按钮功能');
+    alert('重试按钮功能正常！');
+}
+
+// 处理重试按钮点击事件
+function handleRetryButtonClick(event) {
+    console.log('重试按钮被点击');
+    
+    try {
+        const flowId = {{ flow_history.flow_id|default(0)|tojson }};
+        const historyId = {{ flow_history.id|default(0)|tojson }};
+        
+        console.log('Flow ID:', flowId);
+        console.log('History ID:', historyId);
+        
+        if (!flowId || !historyId) {
+            console.error('Flow ID 或 History ID 为空');
+            showToast('无法获取Flow信息，请刷新页面重试', 'error');
+            return;
+        }
+        
+        // 获取原始输入数据
+        {% if flow_history.input_data %}
+        const originalInputData = {{ flow_history.input_data|tojson }};
+        {% else %}
+        const originalInputData = null;
+        {% endif %}
+
+        console.log('重试按钮点击 - Flow ID:', flowId);
+        console.log('重试按钮点击 - History ID:', historyId);
+        console.log('重试按钮点击 - 原始输入数据:', originalInputData);
+
+        // 调用重试函数，显示参数编辑模态框
+        retryFlowWithParams(flowId, historyId, originalInputData);
+    } catch (error) {
+        console.error('重试按钮点击处理出错:', error);
+        showToast('重试功能出现错误: ' + error.message, 'error');
+    }
+}
+
+// 使用原始参数重新执行Flow（显示参数编辑模态框）
+function retryFlowWithParams(flowId, historyId, originalInputData) {
+    console.log('retryFlowWithParams 被调用');
+    console.log('Flow ID:', flowId);
+    console.log('History ID:', historyId);
+    console.log('原始输入数据:', originalInputData);
+
+    // 设置Flow ID
+    document.getElementById('flowId').value = flowId;
+
+    // 解析并设置原始输入数据
+    let paramsText = '';
+    if (originalInputData && originalInputData !== null && originalInputData !== undefined) {
+        console.log('开始解析输入数据...');
+        try {
+            // 如果传入的已经是对象，直接使用；如果是字符串，先解析
+            const inputData = typeof originalInputData === 'string' ? JSON.parse(originalInputData) : originalInputData;
+            console.log('解析后的数据结构:', inputData);
+
+            // 检查数据结构，支持三种格式：
+            // 1. {"args": [arg1, arg2], "kwargs": {...}} - 完整参数格式
+            // 2. {"args": {"__class__": "tuple", "__value__": [...]}, "kwargs": {...}} - 序列化格式
+            // 3. {"a": 1, "b": 2} - 直接参数对象格式（后端存储的实际格式）
+
+            let argsArray = null;
+            let hasArgsKwargsFormat = false;
+
+            if (inputData.args !== undefined) {
+                hasArgsKwargsFormat = true;
+                if (Array.isArray(inputData.args)) {
+                    // 直接数组格式
+                    argsArray = inputData.args;
+                    console.log('发现直接数组格式的位置参数:', argsArray);
+                } else if (inputData.args.__value__ && Array.isArray(inputData.args.__value__)) {
+                    // 序列化格式
+                    argsArray = inputData.args.__value__;
+                    console.log('发现序列化格式的位置参数:', argsArray);
+                }
+            }
+
+            if (hasArgsKwargsFormat) {
+                // 使用 args/kwargs 格式
+                if (argsArray && argsArray.length > 0) {
+                    // 如果有位置参数
+                    if (argsArray.length === 1 && (!inputData.kwargs || Object.keys(inputData.kwargs).length === 0)) {
+                        // 只有一个位置参数，无关键字参数，显示简化格式
+                        paramsText = JSON.stringify(argsArray[0], null, 2);
+                        console.log('使用简化格式:', paramsText);
+                    } else {
+                        // 多个参数或有关键字参数，显示完整格式
+                        paramsText = JSON.stringify({
+                            args: argsArray,
+                            kwargs: inputData.kwargs || {}
+                        }, null, 2);
+                        console.log('使用完整格式:', paramsText);
+                    }
+                } else if (inputData.kwargs && Object.keys(inputData.kwargs).length > 0) {
+                    console.log('发现关键字参数:', inputData.kwargs);
+                    // 只有关键字参数
+                    paramsText = JSON.stringify({
+                        kwargs: inputData.kwargs
+                    }, null, 2);
+                    console.log('使用关键字格式:', paramsText);
+                } else {
+                    console.log('args/kwargs格式但没有有效参数，使用空字符串');
+                    paramsText = '';
+                }
+            } else if (typeof inputData === 'object' && inputData !== null && Object.keys(inputData).length > 0) {
+                // 直接参数对象格式：{"a": 1, "b": 2}
+                // 过滤掉内部元数据字段（如 _metadata）
+                const filteredData = {};
+                for (const key in inputData) {
+                    if (!key.startsWith('_')) {
+                        filteredData[key] = inputData[key];
+                    }
+                }
+
+                if (Object.keys(filteredData).length > 0) {
+                    paramsText = JSON.stringify(filteredData, null, 2);
+                    console.log('使用直接参数对象格式:', paramsText);
+                } else {
+                    console.log('过滤后没有有效参数，使用空字符串');
+                    paramsText = '';
+                }
+            } else {
+                console.log('没有发现有效参数，使用空字符串');
+                paramsText = '';
+            }
+        } catch (e) {
+            console.error('解析原始输入数据失败:', e);
+            // 如果解析失败，根据数据类型处理
+            if (typeof originalInputData === 'object') {
+                paramsText = JSON.stringify(originalInputData, null, 2);
+            } else {
+                paramsText = originalInputData;
+            }
+            console.log('使用回退格式:', paramsText);
+        }
+    } else {
+        console.log('没有原始输入数据');
+    }
+
+    console.log('最终参数文本:', paramsText);
+
+    // 设置参数值
+    const flowParamsElement = document.getElementById('flowParams');
+    if (flowParamsElement) {
+        flowParamsElement.value = paramsText;
+        console.log('参数已设置到输入框');
+    } else {
+        console.error('找不到 flowParams 元素');
+    }
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('triggerModal'));
+    modal.show();
+
+    // 聚焦到参数输入框并选中所有文本
+    setTimeout(() => {
+        const paramsInput = document.getElementById('flowParams');
+        if (paramsInput) {
+            paramsInput.focus();
+            paramsInput.select();
+            console.log('参数输入框已聚焦和选中');
+        } else {
+            console.error('找不到参数输入框元素');
+        }
+    }, 500);
+}
+
+// 确认触发Flow
+function confirmTriggerFlow() {
+    const flowId = document.getElementById('flowId').value;
+    const paramsText = document.getElementById('flowParams').value.trim();
+
+    // 解析参数
+    let inputData = {};
+
+    if (paramsText) {
+        try {
+            // 尝试解析为JSON
+            inputData = JSON.parse(paramsText);
+        } catch (e) {
+            // 如果不是JSON格式，作为简单字符串处理
+            inputData = paramsText;
+        }
+    }
+
+    // 包装成后端期望的格式
+    const requestData = {
+        input_data: inputData,
+        metadata: {}
+    };
+
+    // 关闭模态框
+    const modal = bootstrap.Modal.getInstance(document.getElementById('triggerModal'));
+    modal.hide();
+
+    // 显示加载状态
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    loadingOverlay.style.display = 'flex';
+
+    // 发送请求
+    fetch(`/api/flows/${flowId}/run`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        loadingOverlay.style.display = 'none';
+        if (data.success) {
+            showToast('Flow已成功触发执行！', 'success');
+            // 延迟跳转到历史页面以显示新的运行状态
+            setTimeout(() => {
+                window.location.href = `/flows/${flowId}/history`;
+            }, 1000);
+        } else {
+            showToast('触发失败: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        loadingOverlay.style.display = 'none';
+        console.error('Error:', error);
+        showToast('请求失败，请检查网络连接', 'error');
+    });
+}
+
+// 验证JSON格式
+function validateJSON(text) {
+    try {
+        JSON.parse(text);
+        return { valid: true, error: null };
+    } catch (e) {
+        return { valid: false, error: e.message };
+    }
+}
+
+// 显示通知
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        background: ${type === 'success' ? 'var(--success-color)' : 'var(--danger-color)'};
+        color: white;
+        border-radius: 0.75rem;
+        box-shadow: var(--card-hover-shadow);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease-out;
+    `;
+
+    document.body.appendChild(notification);
+
+    // 自动移除通知
+    setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
+}
+
+// Toast提示功能
+function showToast(message, type = 'info') {
+    // 创建toast元素
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type} animate-fade-in`;
+    toast.style.cssText = `
+        position: fixed;
+        top: 2rem;
+        right: 2rem;
+        padding: 1rem 1.5rem;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        z-index: 9999;
+        font-weight: 500;
+        max-width: 300px;
+    `;
+
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // 自动移除
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// 返回顶部
+function scrollToTop() {
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+}
+
+// 监听滚动事件
+window.addEventListener('scroll', function() {
+    const backToTopBtn = document.getElementById('backToTop');
+    if (window.pageYOffset > 300) {
+        backToTopBtn.style.display = 'flex';
+    } else {
+        backToTopBtn.style.display = 'none';
+    }
+});
+
+// 注意：默认关闭自动刷新，用户可以手动刷新页面
+{% if flow_history.status == 'running' %}
+// 页面加载时显示一次提示，告知用户任务正在运行
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        showToast('任务正在运行中，请手动刷新页面查看最新状态', 'info');
+    }, 1000);
+});
+{% endif %}
+
+// 页面加载完成后执行
+document.addEventListener('DOMContentLoaded', function() {
+    // 渲染输入数据
+    {% if flow_history.input_data %}
+    try {
+        const inputData = {{ flow_history.input_data|tojson }};
+        const viewer = new JSONViewer({clickableUrls: true});
+        const element = document.getElementById('input-data-viewer');
+        if (element) {
+            viewer.render(element, inputData);
+        }
+    } catch (e) {
+        console.error('Failed to parse input data:', e);
+        const element = document.getElementById('input-data-viewer');
+        if (element) {
+            element.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 数据解析失败</div>';
+        }
+    }
+    {% endif %}
+
+    // 渲染输出数据
+    {% if flow_history.output_data %}
+    try {
+        let outputData = {{ flow_history.output_data|tojson }};
+        
+        // 检查是否是字符串形式的JSON，如果是则解析它
+        if (typeof outputData === 'string') {
+            try {
+                outputData = JSON.parse(outputData);
+            } catch (parseError) {
+                console.log('Output data is a string but not valid JSON, using as-is');
+            }
+        }
+        
+        const viewer = new JSONViewer({clickableUrls: true});
+        const element = document.getElementById('output-data-viewer');
+        if (element) {
+            viewer.render(element, outputData);
+        }
+    } catch (e) {
+        console.error('Failed to parse output data:', e);
+        const element = document.getElementById('output-data-viewer');
+        if (element) {
+            element.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 数据解析失败</div>';
+        }
+    }
+    {% endif %}
+
+
+
+    // 渲染所有 Task 的输入输出数据
+    {% for task in task_histories %}
+    {% if task.input_data %}
+    (function() {
+        try {
+            let inputData = {{ task.input_data|tojson }};
+            
+            // 检查是否是字符串形式的JSON，如果是则解析它
+            if (typeof inputData === 'string') {
+                try {
+                    inputData = JSON.parse(inputData);
+                } catch (parseError) {
+                    console.log('Task input data is a string but not valid JSON, using as-is');
+                }
+            }
+            
+            const viewer = new JSONViewer({clickableUrls: true});
+            const element = document.getElementById('task-input-{{ loop.index }}');
+            if (element) {
+                viewer.render(element, inputData);
+            }
+        } catch (e) {
+            console.error('Failed to parse task input data:', e);
+            const element = document.getElementById('task-input-{{ loop.index }}');
+            if (element) {
+                element.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 数据解析失败</div>';
+            }
+        }
+    })();
+    {% endif %}
+
+    {% if task.output_data %}
+    (function() {
+        try {
+            let outputData = {{ task.output_data|tojson }};
+            
+            // 检查是否是字符串形式的JSON，如果是则解析它
+            if (typeof outputData === 'string') {
+                try {
+                    outputData = JSON.parse(outputData);
+                } catch (parseError) {
+                    console.log('Task output data is a string but not valid JSON, using as-is');
+                }
+            }
+            
+            const viewer = new JSONViewer({clickableUrls: true});
+            const element = document.getElementById('task-output-{{ loop.index }}');
+            if (element) {
+                viewer.render(element, outputData);
+            }
+        } catch (e) {
+            console.error('Failed to parse task output data:', e);
+            const element = document.getElementById('task-output-{{ loop.index }}');
+            if (element) {
+                element.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 数据解析失败</div>';
+            }
+        }
+    })();
+    {% endif %}
+    {% endfor %}
+
+    // 添加页面加载动画
+    const sections = document.querySelectorAll('.animate-fade-in');
+    sections.forEach((section, index) => {
+        section.style.animationDelay = `${index * 0.1}s`;
+    });
+
+    // 初始化触发按钮
+    const confirmTriggerBtn = document.getElementById('confirmTrigger');
+    if (confirmTriggerBtn) {
+        confirmTriggerBtn.addEventListener('click', confirmTriggerFlow);
+    }
+
+    // 为参数输入框添加实时验证
+    const flowParamsInput = document.getElementById('flowParams');
+    if (flowParamsInput) {
+        flowParamsInput.addEventListener('input', function() {
+            const text = this.value.trim();
+            if (text) {
+                const validation = validateJSON(text);
+                if (!validation.valid) {
+                    this.classList.add('is-invalid');
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+    }
+
+    // 为重试按钮添加事件监听器（备用方案）
+    const retryButton = document.getElementById('retryButton');
+    if (retryButton) {
+        console.log('找到重试按钮，添加事件监听器');
+        retryButton.addEventListener('click', function(event) {
+            console.log('重试按钮被点击（事件监听器）');
+            handleRetryButtonClick(event);
+        });
+    } else {
+        console.log('未找到重试按钮');
+    }
+});
+
+// 键盘快捷键
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + R: 重新执行（仅当不在输入框中）
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r' && document.activeElement.tagName !== 'INPUT') {
+        e.preventDefault();
+        {% if flow_history.status == 'completed' or flow_history.status == 'failed' %}
+        handleRetryButtonClick(e);
+        {% endif %}
+    }
+
+    // Esc: 返回列表
+    if (e.key === 'Escape') {
+        window.location.href = "{{ url_for('flows.flow_history', flow_id=flow_history.flow_id) }}";
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,218 @@
+/* Flowy管理系统自定义样式 */
+
+/* 全局样式 */
+body {
+    background-color: #f8f9fa;
+}
+
+/* 导航栏样式 */
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+/* 卡片样式 */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* 错误页面样式 */
+.error-code {
+    font-size: 6rem;
+    font-weight: bold;
+    color: #6c757d;
+}
+
+.error-title {
+    color: #495057;
+    margin-bottom: 1rem;
+}
+
+.error-description {
+    color: #6c757d;
+    margin-bottom: 2rem;
+}
+
+/* 表格样式 */
+.table th {
+    border-top: none;
+    font-weight: 600;
+}
+
+.table-responsive {
+    border-radius: 0.375rem;
+}
+
+/* 状态徽章增强 */
+.badge {
+    font-size: 0.75rem;
+    padding: 0.375em 0.75em;
+}
+
+/* 进度条样式 */
+.progress {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar {
+    font-weight: 500;
+}
+
+/* 按钮组样式 */
+.btn-group-sm > .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* 预格式化文本样式 */
+pre {
+    font-size: 0.875rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+pre code {
+    background: none;
+    padding: 0;
+}
+
+/* 空状态样式 */
+.display-1 {
+    opacity: 0.5;
+}
+
+/* 分页样式 */
+.pagination {
+    margin-top: 1rem;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+
+    .btn-group {
+        flex-direction: column;
+    }
+
+    .btn-group .btn {
+        margin-bottom: 0.25rem;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.card {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* 搜索框样式 */
+.form-control:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* 手风琴样式 */
+.accordion-button:not(.collapsed) {
+    background-color: rgba(13, 110, 253, 0.1);
+}
+
+.accordion-button:focus {
+    box-shadow: none;
+    border-color: rgba(0, 0, 0, 0.125);
+}
+
+/* 时间线样式 */
+.timeline-marker i {
+    font-size: 1.2rem;
+}
+
+/* 统计卡片样式 */
+.card.bg-primary,
+.card.bg-success,
+.card.bg-danger,
+.card.bg-info {
+    transition: transform 0.2s;
+}
+
+.card.bg-primary:hover,
+.card.bg-success:hover,
+.card.bg-danger:hover,
+.card.bg-info:hover {
+    transform: translateY(-3px);
+}
+
+/* 导航链接活动状态 */
+.nav-link.active {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 代码块样式 */
+code {
+    background-color: rgba(13, 110, 253, 0.1);
+    padding: 0.2em 0.4em;
+    margin: 0;
+    font-size: 85%;
+    border-radius: 3px;
+}
+
+/* 加载动画 */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.bi-arrow-repeat {
+    animation: spin 2s linear infinite;
+}
+
+/* 模态框样式 */
+.modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.modal-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+/* 表单样式 */
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+/* 下拉菜单样式 */
+.dropdown-menu {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+/* 页脚样式 */
+footer {
+    margin-top: auto;
+    background-color: #fff !important;
+    border-top: 1px solid #dee2e6;
+}

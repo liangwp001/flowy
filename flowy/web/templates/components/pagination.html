@@ -1,0 +1,88 @@
+{% macro pagination(current_page, total_pages, base_url, search=None, status=None, flow_id=None, start_date=None, end_date=None, total_count=None, per_page=30) -%}
+<!-- 分页信息 -->
+{% if total_count %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="text-muted">
+        显示第 {{ ((current_page - 1) * per_page + 1) }} -
+        {{ [current_page * per_page, total_count]|min }} 条，共 {{ total_count }} 条记录
+    </div>
+    <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            每页 {{ per_page }} 条
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=20, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">20 条</a></li>
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=30, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">30 条</a></li>
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=50, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">50 条</a></li>
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=100, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">100 条</a></li>
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+{% if total_pages > 1 %}
+<nav aria-label="分页导航">
+    <ul class="pagination justify-content-center">
+        <!-- 上一页 -->
+        {% if current_page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for(base_url, page=current_page-1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">
+                    <i class="bi bi-chevron-left"></i> 上一页
+                </a>
+            </li>
+        {% else %}
+            <li class="page-item disabled">
+                <span class="page-link"><i class="bi bi-chevron-left"></i> 上一页</span>
+            </li>
+        {% endif %}
+
+        <!-- 页码 -->
+        {% set start_page = [1, current_page - 2]|max %}
+        {% set end_page = [total_pages, current_page + 2]|min %}
+
+        {% if start_page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for(base_url, page=1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">1</a>
+            </li>
+            {% if start_page > 2 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endif %}
+
+        {% for page in range(start_page, end_page + 1) %}
+            {% if page == current_page %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page }}</span>
+                </li>
+            {% else %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for(base_url, page=page, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">{{ page }}</a>
+                </li>
+            {% endif %}
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+            {% if end_page < total_pages - 1 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for(base_url, page=total_pages, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">{{ total_pages }}</a>
+            </li>
+        {% endif %}
+
+        <!-- 下一页 -->
+        {% if current_page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for(base_url, page=current_page+1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">
+                    下一页 <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+        {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">下一页 <i class="bi bi-chevron-right"></i></span>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{%- endmacro %}

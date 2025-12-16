@@ -1,0 +1,1399 @@
+{% extends "base.html" %}
+
+{% block title %}{{ flow.name }} - Flow详情与统计 - Flowy管理系统{% endblock %}
+
+{% set breadcrumb_items = [
+    {'title': 'Flowy管理系统', 'url': url_for('flows.list_flows'), 'icon': 'bi-diagram-3'},
+    {'title': 'Flow列表', 'url': url_for('flows.list_flows'), 'icon': 'bi-list-ul'},
+    {'title': flow.name, 'url': None, 'icon': 'bi-graph-up'}
+] %}
+
+{% block extra_css %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- 增强样式 -->
+<link href="{{ url_for('static', filename='css/flows-detail-enhanced.css') }}" rel="stylesheet">
+<!-- 触发器管理样式 -->
+<link href="{{ url_for('static', filename='css/triggers.css') }}" rel="stylesheet">
+<style>
+/* 临时样式，用于覆盖部分Bootstrap样式 */
+.flow-detail-page main {
+    background: var(--bg-secondary);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-fluid">
+        <div id="main-content" class="flow-detail-page">
+        <!-- 页面标题区 - 包含基本信息 -->
+        <header class="page-header-enhanced fade-in" role="banner">
+            <div class="page-header-top">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <div class="flow-title-section">
+                            <h1 class="page-title">
+                                <i class="bi bi-graph-up" aria-hidden="true"></i> {{ flow.name }}
+                            </h1>
+                            <p class="page-subtitle">{{ flow.description or '暂无描述' }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <nav class="action-buttons justify-content-md-end" role="navigation" aria-label="页面操作">
+                            <button type="button" class="btn-success-enhanced" onclick="showTriggerModal('{{ flow.id }}')" id="triggerBtn" aria-label="执行当前工作流">
+                                <i class="bi bi-play-circle" aria-hidden="true"></i> 立即执行
+                            </button>
+                            <a href="{{ url_for('flows.flow_history', flow_id=flow.id) }}" class="btn-secondary-enhanced" aria-label="查看执行历史">
+                                <i class="bi bi-clock-history" aria-hidden="true"></i> 执行历史
+                            </a>
+                            <a href="{{ url_for('flows.list_flows') }}" class="btn-secondary-enhanced" aria-label="返回工作流列表">
+                                <i class="bi bi-arrow-left" aria-hidden="true"></i> 返回列表
+                            </a>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+            <div class="page-header-bottom">
+                <div class="basic-info-grid" role="list" aria-label="工作流基本信息">
+                    <div class="info-item" role="listitem">
+                        <i class="bi bi-hash info-icon" aria-hidden="true"></i>
+                        <div class="info-content">
+                            <span class="info-label" id="flow-id-label">Flow ID</span>
+                            <code class="info-value" aria-labelledby="flow-id-label">{{ flow.id }}</code>
+                        </div>
+                    </div>
+                    <div class="info-item" role="listitem">
+                        <i class="bi bi-calendar-plus info-icon" aria-hidden="true"></i>
+                        <div class="info-content">
+                            <span class="info-label" id="created-time-label">创建时间</span>
+                            <span class="info-value" aria-labelledby="created-time-label">{{ flow.created_at|datetime if flow.created_at else '-' }}</span>
+                        </div>
+                    </div>
+                    <div class="info-item" role="listitem">
+                        <i class="bi bi-clock-history info-icon" aria-hidden="true"></i>
+                        <div class="info-content">
+                            <span class="info-label" id="latest-execution-label">最近执行</span>
+                            <span class="info-value" aria-labelledby="latest-execution-label">{{ stats.latest_execution|datetime if stats.latest_execution else '-' }}</span>
+                        </div>
+                    </div>
+                    <div class="info-item" role="listitem">
+                        <i class="bi bi-diagram-3 info-icon" aria-hidden="true"></i>
+                        <div class="info-content">
+                            <span class="info-label" id="task-count-label">任务数量</span>
+                            <span class="info-value" aria-labelledby="task-count-label">{{ flow.task_count | default('-', true) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+         <!-- 定时触发器管理区域 -->
+    <section class="triggers-section slide-up" aria-labelledby="triggers-title">
+        <div class="detail-card">
+            <div class="card-header-enhanced">
+                <h2 id="triggers-title" class="card-title-enhanced">
+                    <i class="bi bi-clock-history" aria-hidden="true"></i> 定时触发器
+                </h2>
+                <button type="button" class="btn-success-enhanced" onclick="showCreateTriggerModal()" aria-label="创建新触发器">
+                    <i class="bi bi-plus-circle" aria-hidden="true"></i> 创建触发器
+                </button>
+            </div>
+            <div class="card-body-enhanced">
+                <div id="triggers-list" role="list" aria-label="触发器列表">
+                    <!-- 触发器列表将通过JavaScript动态加载 -->
+                    <div class="text-center" style="padding: var(--space-8); color: var(--gray-400);">
+                        <div class="spinner-enhanced" style="width: 32px; height: 32px; border-width: 3px;"></div>
+                        <p style="margin-top: var(--space-4);">加载触发器列表...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+        <!-- 综合执行统计区域 - 合并KPI和执行状态 -->
+        <section class="execution-stats-container slide-up" aria-labelledby="stats-title">
+            <div class="detail-card">
+                <div class="card-header-enhanced">
+                    <h2 id="stats-title" class="card-title-enhanced">
+                        <i class="bi bi-graph-up-arrow" aria-hidden="true"></i> 执行统计概览
+                    </h2>
+                </div>
+                <div class="card-body-enhanced">
+                    <!-- 主要KPI指标行 -->
+                    <div class="kpi-cards-grid" role="list" aria-label="关键性能指标">
+                        <!-- 总执行次数 -->
+                        <article class="kpi-card-enhanced primary" role="listitem" aria-labelledby="total-executions-label">
+                            <div class="kpi-icon" aria-hidden="true">
+                                <i class="bi bi-activity"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <div class="kpi-value" aria-labelledby="total-executions-label">{{ stats.total_count }}</div>
+                                <p id="total-executions-label" class="kpi-label">总执行次数</p>
+                                {% if stats.total_count > 0 %}
+                                    <span class="kpi-badge active">活跃</span>
+                                {% endif %}
+                            </div>
+                        </article>
+
+                        <!-- 成功率 -->
+                        <div class="kpi-card-enhanced success">
+                            <div class="kpi-icon">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <div class="kpi-value">{{ stats.success_rate }}%</div>
+                                <p class="kpi-label">成功率</p>
+                                {% if stats.success_rate >= 90 %}
+                                    <span class="kpi-badge excellent">优秀</span>
+                                {% elif stats.success_rate >= 70 %}
+                                    <span class="kpi-badge good">良好</span>
+                                {% else %}
+                                    <span class="kpi-badge attention">需关注</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- 平均执行时长 -->
+                        <div class="kpi-card-enhanced info">
+                            <div class="kpi-icon">
+                                <i class="bi bi-hourglass-split"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <div class="kpi-value">{{ stats.avg_duration }}<small>秒</small></div>
+                                <p class="kpi-label">平均执行时长</p>
+                                {% if stats.avg_duration <= 10 %}
+                                    <span class="kpi-badge fast">快速</span>
+                                {% elif stats.avg_duration <= 60 %}
+                                    <span class="kpi-badge normal">正常</span>
+                                {% else %}
+                                    <span class="kpi-badge slow">较慢</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- 最近状态 -->
+                        <div class="kpi-card-enhanced status">
+                            <div class="kpi-icon">
+                                {% if stats.latest_status %}
+                                    {% set status_icons = {'completed': 'check-circle-fill', 'failed': 'x-circle-fill', 'running': 'arrow-repeat', 'pending': 'clock'} %}
+                                    <i class="bi bi-{{ status_icons.get(stats.latest_status, 'question-circle') }}"></i>
+                                {% else %}
+                                    <i class="bi bi-dash-circle"></i>
+                                {% endif %}
+                            </div>
+                            <div class="kpi-content">
+                                {% if stats.latest_status %}
+                                    <div class="kpi-value status-{{ stats.latest_status }}">
+                                        {% if stats.latest_status == 'completed' %}已完成
+                                        {% elif stats.latest_status == 'failed' %}失败
+                                        {% elif stats.latest_status == 'running' %}
+                                            <span>
+                                                运行中
+                                                <span class="status-indicator running"></span>
+                                            </span>
+                                        {% else %}等待中{% endif %}
+                                    </div>
+                                {% else %}
+                                    <div class="kpi-value no-execution">未执行</div>
+                                {% endif %}
+                                <p class="kpi-label">最近状态</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 执行状态分布区域 -->
+                    <div class="status-distribution-section">
+                        <h6 class="section-title">执行状态分布</h6>
+                        <div class="distribution-grid">
+                            <div class="distribution-item success">
+                                <div class="distribution-icon">
+                                    <span class="status-indicator success"></span>
+                                </div>
+                                <div class="distribution-content">
+                                    <span class="distribution-count">{{ stats.success_count }}</span>
+                                    <span class="distribution-label">成功</span>
+                                </div>
+                            </div>
+                            <div class="distribution-item failed">
+                                <div class="distribution-icon">
+                                    <span class="status-indicator failed"></span>
+                                </div>
+                                <div class="distribution-content">
+                                    <span class="distribution-count">{{ stats.failed_count }}</span>
+                                    <span class="distribution-label">失败</span>
+                                </div>
+                            </div>
+                            <div class="distribution-item running">
+                                <div class="distribution-icon">
+                                    <span class="status-indicator running"></span>
+                                </div>
+                                <div class="distribution-content">
+                                    <span class="distribution-count">{{ stats.running_count }}</span>
+                                    <span class="distribution-label">运行中</span>
+                                </div>
+                            </div>
+                            <div class="distribution-item pending">
+                                <div class="distribution-icon">
+                                    <span class="status-indicator pending"></span>
+                                </div>
+                                <div class="distribution-content">
+                                    <span class="distribution-count">{{ stats.pending_count }}</span>
+                                    <span class="distribution-label">等待中</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="progress-enhanced">
+                            {% set total = stats.total_count if stats.total_count > 0 else 1 %}
+                            {% set success_percent = (stats.success_count / total * 100) %}
+                            {% set failed_percent = (stats.failed_count / total * 100) %}
+                            {% set running_percent = (stats.running_count / total * 100) %}
+                            {% set pending_percent = (stats.pending_count / total * 100) %}
+                            <div class="progress-bar-enhanced success" style="width: {{ success_percent }}%;" title="成功: {{ success_percent }}%"></div>
+                            <div class="progress-bar-enhanced danger" style="width: {{ failed_percent }}%;" title="失败: {{ failed_percent }}%"></div>
+                            <div class="progress-bar-enhanced primary" style="width: {{ running_percent }}%;" title="运行中: {{ running_percent }}%"></div>
+                            <div class="progress-bar-enhanced secondary" style="width: {{ pending_percent }}%;" title="等待中: {{ pending_percent }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    <!-- 数据可视化区 - 合并趋势分析 -->
+        {% if stats.total_count > 0 %}
+        <!-- 执行趋势与时间分析 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="detail-card fade-in">
+                    <div class="card-header-enhanced">
+                        <h5 class="card-title-enhanced">
+                            <i class="bi bi-graph-up"></i> 执行趋势与时间分析
+                        </h5>
+                        <div class="time-range-selector">
+                            <button type="button" class="time-range-btn" onclick="updateChartData(7)">7天</button>
+                            <button type="button" class="time-range-btn active" onclick="updateChartData(30)">30天</button>
+                            <button type="button" class="time-range-btn" onclick="updateChartData(90)">90天</button>
+                        </div>
+                    </div>
+                    <div class="card-body-enhanced">
+                        <div class="row">
+                            <!-- 执行趋势图 -->
+                            <div class="col-lg-8 mb-4 mb-lg-0">
+                                <div class="chart-section">
+                                    <h3 class="chart-title" id="trend-chart-title">执行趋势图</h3>
+                                    <div class="chart-container-enhanced" id="trendChartContainer" role="img" aria-labelledby="trend-chart-title">
+                                        <div class="chart-skeleton" id="trendSkeleton" aria-hidden="true"></div>
+                                        <canvas id="trendChart" style="display: none;" aria-label="显示工作流执行成功和失败的趋势"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 执行时长分布 -->
+                            <div class="col-lg-4">
+                                <div class="chart-section">
+                                    <h3 class="chart-title" id="duration-chart-title">执行时长分布</h3>
+                                    <div class="chart-container-enhanced" id="durationChartContainer" role="img" aria-labelledby="duration-chart-title">
+                                        <div class="chart-skeleton" id="durationSkeleton" aria-hidden="true"></div>
+                                        <canvas id="durationChart" style="display: none;" aria-label="显示工作流执行时长的分布情况"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 24小时执行分布 -->
+                        <div class="mt-4">
+                            <div class="chart-section">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <h3 class="chart-title" id="hourly-chart-title">24小时执行分布</h3>
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle" aria-hidden="true"></i>
+                                        <span id="hourly-chart-description">显示每个小时内成功、失败、等待中和运行中的执行次数</span>
+                                    </small>
+                                </div>
+                                <div class="chart-container-enhanced hourly-chart" id="hourlyChartContainer" role="img" aria-labelledby="hourly-chart-title hourly-chart-description">
+                                    <div class="chart-skeleton" id="hourlySkeleton" aria-hidden="true"></div>
+                                    <canvas id="hourlyChart" style="display: none;" aria-label="显示24小时内工作流执行情况的分布图"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- 空状态 -->
+        <div class="detail-card">
+            <div class="empty-state">
+                <i class="bi bi-graph-up empty-state-icon"></i>
+                <h3 class="empty-state-title">暂无执行数据</h3>
+                <p class="empty-state-description">
+                    执行该Flow后，这里将显示详细的统计图表和分析，帮助您了解工作流的执行情况和性能表现。
+                </p>
+                <button type="button" class="btn-success-enhanced" onclick="showTriggerModal('{{ flow.id }}')" style="font-size: var(--text-base); padding: var(--space-4) var(--space-8);">
+                    <i class="bi bi-play-circle"></i> 立即执行
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    </div>
+</div>
+
+<!-- 触发Flow的模态框 -->
+<div class="modal fade" id="triggerFlowModal" tabindex="-1" aria-labelledby="triggerFlowModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="triggerFlowModalLabel">
+                    <i class="bi bi-play-circle"></i> 触发Flow执行
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="triggerFlowForm">
+                    <!-- 输入参数部分 -->
+                    <div class="mb-4">
+                        <h6 class="mb-3">
+                            <i class="bi bi-input-cursor-text"></i> 输入参数（JSON格式）
+                        </h6>
+                        <div class="form-group">
+                            <textarea class="form-control" id="inputData" rows="8" placeholder='{
+    "param1": "value1",
+    "param2": "value2"
+}'></textarea>
+                            <div class="form-text">
+                                输入Flow的参数，JSON格式。这些参数将作为kwargs传递给Flow函数。
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 元数据部分 -->
+                    <div class="mb-4">
+                        <h6 class="mb-3">
+                            <i class="bi bi-tags"></i> 元数据（可选）
+                        </h6>
+                        <div class="form-group">
+                            <textarea class="form-control" id="metadata" rows="4" placeholder='{
+    "trigger_source": "manual",
+    "description": "手动触发执行",
+    "tags": ["test", "manual"]
+}'></textarea>
+                            <div class="form-text">
+                                可选的元数据信息，用于标记此次执行的特殊信息，如触发来源、描述等。
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" id="confirmTriggerBtn">
+                    <i class="bi bi-play-circle"></i> 确认执行
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建/编辑触发器的模态框 -->
+<div class="modal fade" id="triggerModal" tabindex="-1" aria-labelledby="triggerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="triggerModalLabel">
+                    <i class="bi bi-plus-circle"></i> <span id="triggerModalTitle">创建触发器</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="triggerForm">
+                    <input type="hidden" id="triggerId" value="">
+
+                    <!-- 触发器名称 -->
+                    <div class="mb-3">
+                        <label for="triggerName" class="form-label">
+                            <i class="bi bi-tag"></i> 触发器名称 <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="triggerName" required
+                               placeholder="例如: 每日数据同步">
+                        <div class="invalid-feedback">请输入触发器名称</div>
+                    </div>
+
+                    <!-- 触发器描述 -->
+                    <div class="mb-3">
+                        <label for="triggerDescription" class="form-label">
+                            <i class="bi bi-file-text"></i> 描述
+                        </label>
+                        <textarea class="form-control" id="triggerDescription" rows="2"
+                                  placeholder="描述触发器的用途"></textarea>
+                    </div>
+
+                    <!-- Cron表达式 -->
+                    <div class="mb-3">
+                        <label for="triggerCron" class="form-label">
+                            <i class="bi bi-clock"></i> Cron表达式 <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="triggerCron" required
+                                   placeholder="例如: 0 0 * * *">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                常用模板
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpression('0 0 * * *')">每天午夜 (0 0 * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpression('0 9 * * *')">每天上午9点 (0 9 * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpression('0 */6 * * *')">每6小时 (0 */6 * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpression('*/30 * * * *')">每30分钟 (*/30 * * * *)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpression('0 9 * * 1')">每周一上午9点 (0 9 * * 1)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpression('0 9 * * 1-5')">工作日上午9点 (0 9 * * 1-5)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCronExpression('0 0 1 * *')">每月1号午夜 (0 0 1 * *)</a></li>
+                            </ul>
+                        </div>
+                        <div class="form-text">
+                            Cron表达式格式: 分 时 日 月 周 (例如: 0 0 * * * 表示每天午夜执行)
+                        </div>
+                        <div class="invalid-feedback">请输入有效的Cron表达式</div>
+                    </div>
+
+                    <!-- 触发参数 -->
+                    <div class="mb-3">
+                        <label for="triggerParams" class="form-label">
+                            <i class="bi bi-braces"></i> 触发参数 (JSON格式)
+                        </label>
+                        <textarea class="form-control" id="triggerParams" rows="6"
+                                  placeholder='{
+    "param1": "value1",
+    "param2": "value2"
+}'></textarea>
+                        <div class="form-text">
+                            执行工作流时传入的参数，JSON格式。留空表示不传递参数。
+                        </div>
+                        <div class="invalid-feedback">请输入有效的JSON格式</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" id="saveTriggerBtn">
+                    <i class="bi bi-check-circle"></i> 保存
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 全局变量
+let trendChart = null;
+let durationChart = null;
+let hourlyChart = null;
+let currentFlowId = null;
+
+// 页面加载完成后初始化
+$(document).ready(function() {
+    // 添加淡入动画
+    $('.fade-in').each(function(index) {
+        $(this).css('animation-delay', `${index * 0.1}s`);
+    });
+
+    if ({{ stats.total_count|default(0) }} > 0) {
+        // 延迟初始化图表，等待骨架屏动画
+        setTimeout(() => {
+            initCharts();
+            loadChartData(30);
+            loadRecentHistory();
+        }, 500);
+    }
+
+    // 加载触发器列表
+    loadTriggersList();
+
+    // 绑定保存触发器按钮事件
+    document.getElementById('saveTriggerBtn').addEventListener('click', function() {
+        saveTrigger();
+    });
+
+    // 绑定确认执行按钮事件
+    document.getElementById('confirmTriggerBtn').addEventListener('click', function() {
+        const inputDataText = document.getElementById('inputData').value.trim();
+        const metadataText = document.getElementById('metadata').value.trim();
+
+        // 解析输入参数
+        let inputData = {};
+        if (inputDataText) {
+            try {
+                inputData = JSON.parse(inputDataText);
+            } catch (e) {
+                showToast('输入参数格式错误，请输入有效的JSON格式', 'error');
+                return;
+            }
+        }
+
+        // 解析元数据
+        let metadata = {};
+        if (metadataText) {
+            try {
+                metadata = JSON.parse(metadataText);
+            } catch (e) {
+                showToast('元数据格式错误，请输入有效的JSON格式', 'error');
+                return;
+            }
+        }
+
+        // 触发Flow
+        triggerFlow(currentFlowId, inputData, metadata);
+    });
+});
+
+// 显示Toast通知
+function showToast(message, type = 'success') {
+    const toastHtml = `
+        <div class="toast-enhanced ${type}">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+
+    let container = $('.toast-container');
+    if (container.length === 0) {
+        container = $('<div class="toast-container"></div>');
+        $('body').append(container);
+    }
+
+    const toast = $(toastHtml);
+    container.append(toast);
+
+    setTimeout(() => {
+        toast.fadeOut(() => toast.remove());
+    }, 3000);
+}
+
+// 初始化图表
+function initCharts() {
+    // 执行趋势图
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    trendChart = new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: '成功',
+                data: [],
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: '失败',
+                data: [],
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleFont: {
+                        size: 14
+                    },
+                    bodyFont: {
+                        size: 13
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        drawBorder: false,
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+
+    // 执行时长分布图
+    const durationCtx = document.getElementById('durationChart').getContext('2d');
+    durationChart = new Chart(durationCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: [
+                    '#10b981',
+                    '#3b82f6',
+                    '#f59e0b',
+                    '#f97316',
+                    '#ef4444'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // 每小时执行分布图 - 分组柱状图
+    const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+    hourlyChart = new Chart(hourlyCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: '成功',
+                    data: [],
+                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                    borderColor: '#10b981',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: '失败',
+                    data: [],
+                    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: '等待中',
+                    data: [],
+                    backgroundColor: 'rgba(107, 114, 128, 0.6)',
+                    borderColor: '#6b7280',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: '运行中',
+                    data: [],
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        title: function(context) {
+                            return `${context[0].label} 执行统计`;
+                        },
+                        afterBody: function(context) {
+                            let total = 0;
+                            context.forEach(function(item) {
+                                total += item.parsed.y;
+                            });
+                            return `总执行次数: ${total}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        font: {
+                            size: 11
+                        }
+                    },
+                    grid: {
+                        drawBorder: false,
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    title: {
+                        display: true,
+                        text: '执行次数',
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                x: {
+                    ticks: {
+                        font: {
+                            size: 11
+                        },
+                        maxRotation: 45,
+                        minRotation: 45
+                    },
+                    grid: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: '时间',
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
+            }
+        }
+    });
+}
+
+// 加载图表数据
+function loadChartData(days) {
+    // 显示加载状态
+    showChartSkeletons(true);
+
+    fetch(`/api/flows/{{ flow.id }}/chart-data?days=${days}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 延迟更新图表，让骨架屏动画更明显
+                setTimeout(() => {
+                    updateTrendChart(data.data.daily_trend);
+                    updateDurationChart(data.data.duration_distribution);
+                    updateHourlyChart(data.data.hourly_distribution);
+                    showChartSkeletons(false);
+                }, 300);
+            } else {
+                console.error('加载图表数据失败:', data.error);
+                showToast('加载图表数据失败', 'error');
+                showChartSkeletons(false);
+            }
+        })
+        .catch(error => {
+            console.error('请求失败:', error);
+            showToast('网络请求失败', 'error');
+            showChartSkeletons(false);
+        });
+}
+
+// 显示/隐藏骨架屏
+function showChartSkeletons(show) {
+    const skeletons = ['trendSkeleton', 'durationSkeleton', 'hourlySkeleton'];
+    const charts = ['trendChart', 'durationChart', 'hourlyChart'];
+
+    skeletons.forEach(id => {
+        const skeleton = document.getElementById(id);
+        if (skeleton) {
+            skeleton.style.display = show ? 'block' : 'none';
+        }
+    });
+
+    charts.forEach(id => {
+        const chart = document.getElementById(id);
+        if (chart) {
+            chart.style.display = show ? 'none' : 'block';
+        }
+    });
+}
+
+// 更新趋势图
+function updateTrendChart(trendData) {
+    // 添加空值检查
+    if (!trendData || !trendData.dates || !trendChart) {
+        console.error('趋势图数据为空');
+        return;
+    }
+
+    trendChart.data.labels = trendData.dates.map(date => {
+        const d = new Date(date);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+    });
+    trendChart.data.datasets[0].data = trendData.success || [];
+    trendChart.data.datasets[1].data = trendData.failed || [];
+    trendChart.update('active');
+}
+
+// 更新时长分布图
+function updateDurationChart(durationData) {
+    // 添加空值检查
+    if (!durationData || !durationChart) {
+        console.error('时长分布图数据为空');
+        return;
+    }
+
+    durationChart.data.labels = durationData.labels || [];
+    durationChart.data.datasets[0].data = durationData.data || [];
+    durationChart.update('active');
+}
+
+// 更新每小时分布图
+function updateHourlyChart(hourlyData) {
+    // 添加空值检查
+    if (!hourlyData || !hourlyChart) {
+        console.error('每小时分布图数据为空');
+        return;
+    }
+
+    hourlyChart.data.labels = hourlyData.hours || [];
+    hourlyChart.data.datasets[0].data = hourlyData.success || [];
+    hourlyChart.data.datasets[1].data = hourlyData.failed || [];
+    hourlyChart.data.datasets[2].data = hourlyData.pending || [];
+    hourlyChart.data.datasets[3].data = hourlyData.running || [];
+    hourlyChart.update('active');
+}
+
+// 更新图表数据（通过按钮）
+function updateChartData(days) {
+    // 更新按钮状态
+    document.querySelectorAll('.time-range-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    // 添加空值检查
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
+
+    // 重新加载数据
+    loadChartData(days);
+}
+
+// 加载最近执行历史
+function loadRecentHistory() {
+    const tbody = document.getElementById('recent-history-tbody');
+
+    // 添加空值检查
+    if (!tbody) {
+        console.error('找不到历史记录表格元素');
+        return;
+    }
+
+    fetch(`/api/flows/{{ flow.id }}/history?per_page=10`)
+        .then(response => response.json())
+        .then(data => {
+            // 添加空值检查
+            if (data && data.success && data.data && data.data.histories && data.data.histories.length > 0) {
+                tbody.innerHTML = data.data.histories.map(history => {
+                    const duration = history.start_time && history.end_time ?
+                        calculateDuration(history.start_time, history.end_time) : '-';
+                    return `
+                        <tr>
+                            <td>${statusBadgeHTML(history.status)}</td>
+                            <td>${formatDateTime(history.start_time)}</td>
+                            <td>${duration}</td>
+                            <td>
+                                <a href="/history/detail/${history.id}" class="btn-secondary-enhanced" style="font-size: var(--text-xs); padding: var(--space-1) var(--space-2);">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                // 添加淡入动画
+                tbody.querySelectorAll('tr').forEach((tr, index) => {
+                    tr.style.opacity = '0';
+                    tr.style.transform = 'translateY(10px)';
+                    setTimeout(() => {
+                        tr.style.transition = 'all 0.3s ease';
+                        tr.style.opacity = '1';
+                        tr.style.transform = 'translateY(0)';
+                    }, index * 50);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding: var(--space-6); color: var(--gray-400);">暂无执行记录</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding: var(--space-6); color: var(--danger-500);">加载失败</td></tr>';
+        });
+}
+
+// 显示触发Flow的模态框
+function showTriggerModal(flowId) {
+    currentFlowId = flowId;
+    // 清空表单
+    document.getElementById('inputData').value = '';
+    document.getElementById('metadata').value = '';
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('triggerFlowModal'));
+    modal.show();
+}
+
+// 触发Flow执行
+function triggerFlow(flowId, inputData, metadata) {
+    const confirmBtn = document.getElementById('confirmTriggerBtn');
+    const originalContent = confirmBtn.innerHTML;
+
+    // 显示加载状态
+    confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> 执行中...';
+    confirmBtn.disabled = true;
+
+    // 构建请求数据
+    const requestData = {
+        input_data: inputData,
+        metadata: metadata
+    };
+
+    fetch(`/api/flows/${flowId}/run`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Flow已成功触发执行！', 'success');
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('triggerFlowModal'));
+            modal.hide();
+            // 延迟刷新页面，让用户看到成功提示
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            throw new Error(data.error || '触发失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast(error.message || '请求失败，请检查网络连接', 'error');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        confirmBtn.innerHTML = originalContent;
+        confirmBtn.disabled = false;
+    });
+}
+
+// 计算时长
+function calculateDuration(startTime, endTime) {
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const diff = end - start;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+        return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+    } else {
+        return `${seconds}s`;
+    }
+}
+
+// 格式化日期时间
+function formatDateTime(dateTime) {
+    if (!dateTime) return '-';
+    const date = new Date(dateTime);
+    return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// 状态徽章HTML
+function statusBadgeHTML(status) {
+    const statusMap = {
+        'pending': '<span class="status-badge-enhanced pending"><span class="status-indicator pending"></span>等待中</span>',
+        'running': '<span class="status-badge-enhanced running"><span class="status-indicator running"></span>运行中</span>',
+        'completed': '<span class="status-badge-enhanced success"><span class="status-indicator success"></span>已完成</span>',
+        'failed': '<span class="status-badge-enhanced failed"><span class="status-indicator failed"></span>失败</span>'
+    };
+    return statusMap[status] || `<span class="status-badge-enhanced pending">${status}</span>`;
+}
+
+// ========================================
+// 触发器管理功能
+// ========================================
+
+// 加载触发器列表
+function loadTriggersList() {
+    const triggersList = document.getElementById('triggers-list');
+
+    fetch(`/api/flows/{{ flow.id }}/triggers`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.data && data.data.length > 0) {
+                    renderTriggersList(data.data);
+                } else {
+                    triggersList.innerHTML = `
+                        <div class="empty-state" style="padding: var(--space-8);">
+                            <i class="bi bi-clock-history empty-state-icon" style="font-size: 3rem;"></i>
+                            <h3 class="empty-state-title" style="font-size: var(--text-lg);">暂无定时触发器</h3>
+                            <p class="empty-state-description" style="font-size: var(--text-sm);">
+                                创建定时触发器，让工作流按照指定的时间规则自动执行
+                            </p>
+                        </div>
+                    `;
+                }
+            } else {
+                showToast('加载触发器列表失败: ' + (data.error || '未知错误'), 'error');
+                triggersList.innerHTML = `
+                    <div class="text-center" style="padding: var(--space-8); color: var(--danger-500);">
+                        <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
+                        <p style="margin-top: var(--space-2);">加载失败</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading triggers:', error);
+            showToast('网络请求失败', 'error');
+            triggersList.innerHTML = `
+                <div class="text-center" style="padding: var(--space-8); color: var(--danger-500);">
+                    <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
+                    <p style="margin-top: var(--space-2);">网络请求失败</p>
+                </div>
+            `;
+        });
+}
+
+// 渲染触发器列表
+function renderTriggersList(triggers) {
+    const triggersList = document.getElementById('triggers-list');
+
+    const html = `
+        <div class="triggers-grid">
+            ${triggers.map(trigger => `
+                <div class="trigger-item" data-trigger-id="${trigger.id}">
+                    <div class="trigger-header">
+                        <div class="trigger-info">
+                            <h4 class="trigger-name">
+                                <i class="bi bi-alarm"></i>
+                                ${escapeHtml(trigger.name)}
+                            </h4>
+                            <p class="trigger-description">${escapeHtml(trigger.description || '无描述')}</p>
+                        </div>
+                        <div class="trigger-status">
+                            ${trigger.enabled ?
+                                '<span class="status-badge-enhanced success"><span class="status-indicator success"></span>已启用</span>' :
+                                '<span class="status-badge-enhanced pending"><span class="status-indicator pending"></span>已禁用</span>'
+                            }
+                        </div>
+                    </div>
+                    <div class="trigger-details">
+                        <div class="trigger-detail-item">
+                            <i class="bi bi-clock"></i>
+                            <span class="detail-label">Cron表达式:</span>
+                            <code class="detail-value">${escapeHtml(trigger.cron_expression)}</code>
+                        </div>
+                        <div class="trigger-detail-item">
+                            <i class="bi bi-calendar-plus"></i>
+                            <span class="detail-label">创建时间:</span>
+                            <span class="detail-value">${formatDateTime(trigger.created_at)}</span>
+                        </div>
+                    </div>
+                    <div class="trigger-actions">
+                        <button type="button" class="btn-action edit" onclick="editTrigger(${trigger.id})" title="编辑">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button type="button" class="btn-action toggle ${trigger.enabled ? 'enabled' : 'disabled'}" 
+                                onclick="toggleTrigger(${trigger.id}, ${!trigger.enabled})" 
+                                title="${trigger.enabled ? '禁用' : '启用'}">
+                            <i class="bi bi-${trigger.enabled ? 'pause-circle' : 'play-circle'}"></i>
+                        </button>
+                        <button type="button" class="btn-action delete" onclick="deleteTrigger(${trigger.id})" title="删除">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    triggersList.innerHTML = html;
+}
+
+// HTML转义函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 显示创建触发器模态框
+function showCreateTriggerModal() {
+    // 重置表单
+    document.getElementById('triggerForm').reset();
+    document.getElementById('triggerId').value = '';
+    document.getElementById('triggerModalTitle').textContent = '创建触发器';
+
+    // 移除验证状态
+    document.getElementById('triggerForm').classList.remove('was-validated');
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('triggerModal'));
+    modal.show();
+}
+
+// 设置Cron表达式
+function setCronExpression(expression) {
+    document.getElementById('triggerCron').value = expression;
+    event.preventDefault();
+}
+
+// 编辑触发器
+function editTrigger(triggerId) {
+    // 获取触发器数据
+    fetch(`/api/triggers/${triggerId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data) {
+                const trigger = data.data;
+
+                // 填充表单
+                document.getElementById('triggerId').value = trigger.id;
+                document.getElementById('triggerName').value = trigger.name;
+                document.getElementById('triggerDescription').value = trigger.description || '';
+                document.getElementById('triggerCron').value = trigger.cron_expression;
+
+                // 格式化JSON参数
+                if (trigger.trigger_params) {
+                    try {
+                        const params = typeof trigger.trigger_params === 'string' ?
+                            JSON.parse(trigger.trigger_params) : trigger.trigger_params;
+                        document.getElementById('triggerParams').value = JSON.stringify(params, null, 2);
+                    } catch (e) {
+                        document.getElementById('triggerParams').value = trigger.trigger_params;
+                    }
+                } else {
+                    document.getElementById('triggerParams').value = '';
+                }
+
+                // 更新模态框标题
+                document.getElementById('triggerModalTitle').textContent = '编辑触发器';
+
+                // 显示模态框
+                const modal = new bootstrap.Modal(document.getElementById('triggerModal'));
+                modal.show();
+            } else {
+                showToast('加载触发器数据失败', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('网络请求失败', 'error');
+        });
+}
+
+// 删除触发器
+function deleteTrigger(triggerId) {
+    if (!confirm('确定要删除这个触发器吗？删除后将无法恢复。')) {
+        return;
+    }
+
+    fetch(`/api/triggers/${triggerId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('触发器删除成功！', 'success');
+            // 重新加载触发器列表
+            loadTriggersList();
+        } else {
+            throw new Error(data.error || '删除失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast(error.message || '删除失败', 'error');
+    });
+}
+
+// 切换触发器状态
+function toggleTrigger(triggerId, enabled) {
+    fetch(`/api/triggers/${triggerId}/toggle`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: enabled })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(enabled ? '触发器已启用' : '触发器已禁用', 'success');
+            // 重新加载触发器列表
+            loadTriggersList();
+        } else {
+            throw new Error(data.error || '操作失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast(error.message || '操作失败', 'error');
+    });
+}
+
+// 验证并保存触发器
+function saveTrigger() {
+    const form = document.getElementById('triggerForm');
+    const triggerId = document.getElementById('triggerId').value;
+    const name = document.getElementById('triggerName').value.trim();
+    const description = document.getElementById('triggerDescription').value.trim();
+    const cronExpression = document.getElementById('triggerCron').value.trim();
+    const paramsText = document.getElementById('triggerParams').value.trim();
+
+    // 客户端验证
+    if (!name) {
+        document.getElementById('triggerName').classList.add('is-invalid');
+        showToast('请输入触发器名称', 'error');
+        return;
+    }
+
+    if (!cronExpression) {
+        document.getElementById('triggerCron').classList.add('is-invalid');
+        showToast('请输入Cron表达式', 'error');
+        return;
+    }
+
+    // 验证JSON格式
+    let triggerParams = {};
+    if (paramsText) {
+        try {
+            triggerParams = JSON.parse(paramsText);
+        } catch (e) {
+            document.getElementById('triggerParams').classList.add('is-invalid');
+            showToast('触发参数格式错误，请输入有效的JSON格式', 'error');
+            return;
+        }
+    }
+
+    // 移除验证错误状态
+    document.getElementById('triggerName').classList.remove('is-invalid');
+    document.getElementById('triggerCron').classList.remove('is-invalid');
+    document.getElementById('triggerParams').classList.remove('is-invalid');
+
+    // 禁用保存按钮
+    const saveBtn = document.getElementById('saveTriggerBtn');
+    const originalContent = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> 保存中...';
+    saveBtn.disabled = true;
+
+    // 构建请求数据
+    const requestData = {
+        flow_id: '{{ flow.id }}',
+        name: name,
+        description: description,
+        cron_expression: cronExpression,
+        trigger_params: triggerParams
+    };
+
+    // 判断是创建还是更新
+    const url = triggerId ? `/api/triggers/${triggerId}` : '/api/triggers';
+    const method = triggerId ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(triggerId ? '触发器更新成功！' : '触发器创建成功！', 'success');
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('triggerModal'));
+            modal.hide();
+            // 重新加载触发器列表
+            loadTriggersList();
+        } else {
+            throw new Error(data.error || '保存失败');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast(error.message || '保存失败，请检查输入', 'error');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        saveBtn.innerHTML = originalContent;
+        saveBtn.disabled = false;
+    });
+}
+</script>
+{% endblock %}

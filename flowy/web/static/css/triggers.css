@@ -1,0 +1,354 @@
+/* ========================================
+   触发器管理样式
+   与现有界面风格保持一致
+   ======================================== */
+
+/* 触发器区域 */
+.triggers-section {
+    margin-bottom: var(--space-6);
+}
+
+/* 触发器网格布局 */
+.triggers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+    .triggers-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
+    }
+}
+
+/* 触发器卡片 */
+.trigger-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--gray-200);
+    border-radius: 0.75rem;
+    padding: var(--space-4);
+    transition: all var(--transition-normal) ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.trigger-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+}
+
+.trigger-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-200);
+}
+
+/* 触发器头部 */
+.trigger-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+    gap: var(--space-3);
+}
+
+.trigger-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.trigger-name {
+    font-size: var(--text-base);
+    font-weight: var(--font-semibold);
+    color: var(--gray-900);
+    margin: 0 0 var(--space-1) 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    word-break: break-word;
+}
+
+.trigger-name i {
+    color: var(--primary-500);
+    font-size: var(--text-lg);
+    flex-shrink: 0;
+}
+
+.trigger-description {
+    font-size: var(--text-sm);
+    color: var(--gray-500);
+    margin: 0;
+    line-height: var(--leading-relaxed);
+    word-break: break-word;
+}
+
+.trigger-status {
+    flex-shrink: 0;
+}
+
+/* 触发器详情 */
+.trigger-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: var(--gray-50);
+    border-radius: 0.5rem;
+    margin-bottom: var(--space-3);
+}
+
+.trigger-detail-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+}
+
+.trigger-detail-item i {
+    color: var(--gray-400);
+    font-size: var(--text-base);
+    flex-shrink: 0;
+}
+
+.trigger-detail-item .detail-label {
+    color: var(--gray-600);
+    font-weight: var(--font-medium);
+    flex-shrink: 0;
+}
+
+.trigger-detail-item .detail-value {
+    color: var(--gray-700);
+    word-break: break-all;
+}
+
+.trigger-detail-item code {
+    background: var(--gray-100);
+    padding: var(--space-1) var(--space-2);
+    border-radius: 0.25rem;
+    font-size: var(--text-xs);
+    font-family: var(--font-mono);
+}
+
+/* 触发器操作按钮 */
+.trigger-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+}
+
+.btn-action {
+    width: 36px;
+    height: 36px;
+    border-radius: 0.5rem;
+    border: 1px solid var(--gray-200);
+    background: var(--bg-primary);
+    color: var(--gray-600);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast) ease;
+    font-size: var(--text-base);
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-action.edit:hover {
+    background: var(--info-50);
+    border-color: var(--info-300);
+    color: var(--info-600);
+}
+
+.btn-action.toggle:hover {
+    background: var(--warning-50);
+    border-color: var(--warning-300);
+    color: var(--warning-600);
+}
+
+.btn-action.toggle.enabled:hover {
+    background: var(--success-50);
+    border-color: var(--success-300);
+    color: var(--success-600);
+}
+
+.btn-action.delete:hover {
+    background: var(--danger-50);
+    border-color: var(--danger-300);
+    color: var(--danger-600);
+}
+
+/* 模态框样式增强 */
+#triggerModal .modal-content {
+    border-radius: 1rem;
+    border: none;
+    box-shadow: var(--shadow-xl);
+}
+
+#triggerModal .modal-header {
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    padding: var(--space-5) var(--space-6);
+    border-radius: 1rem 1rem 0 0;
+}
+
+#triggerModal .modal-title {
+    font-size: var(--text-xl);
+    font-weight: var(--font-semibold);
+    color: var(--gray-900);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+#triggerModal .modal-title i {
+    color: var(--primary-500);
+}
+
+#triggerModal .modal-body {
+    padding: var(--space-6);
+}
+
+#triggerModal .form-label {
+    font-weight: var(--font-medium);
+    color: var(--gray-700);
+    margin-bottom: var(--space-2);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+#triggerModal .form-label i {
+    color: var(--primary-500);
+}
+
+#triggerModal .form-control {
+    border-radius: 0.5rem;
+    border: 1px solid var(--gray-300);
+    padding: var(--space-3);
+    font-size: var(--text-sm);
+    transition: all var(--transition-fast) ease;
+}
+
+#triggerModal .form-control:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+#triggerModal .form-control.is-invalid {
+    border-color: var(--danger-500);
+}
+
+#triggerModal .form-control.is-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+#triggerModal .form-text {
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+    margin-top: var(--space-1);
+}
+
+#triggerModal .invalid-feedback {
+    font-size: var(--text-xs);
+    color: var(--danger-600);
+    margin-top: var(--space-1);
+}
+
+#triggerModal .dropdown-menu {
+    border-radius: 0.5rem;
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-2);
+}
+
+#triggerModal .dropdown-item {
+    border-radius: 0.375rem;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
+    transition: all var(--transition-fast) ease;
+}
+
+#triggerModal .dropdown-item:hover {
+    background: var(--primary-50);
+    color: var(--primary-600);
+}
+
+#triggerModal .modal-footer {
+    border-top: 1px solid var(--gray-200);
+    padding: var(--space-5) var(--space-6);
+    background: var(--gray-50);
+    border-radius: 0 0 1rem 1rem;
+}
+
+/* 响应式设计 */
+@media (max-width: 576px) {
+    .trigger-item {
+        padding: var(--space-3);
+    }
+    
+    .trigger-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .trigger-status {
+        align-self: flex-start;
+    }
+    
+    .trigger-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .btn-action {
+        flex: 1;
+    }
+    
+    #triggerModal .modal-body {
+        padding: var(--space-4);
+    }
+    
+    #triggerModal .modal-header,
+    #triggerModal .modal-footer {
+        padding: var(--space-4);
+    }
+}
+
+/* 动画效果 */
+.trigger-item {
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 加载状态 */
+.triggers-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12);
+    color: var(--gray-400);
+}
+
+.triggers-loading .spinner-enhanced {
+    margin-bottom: var(--space-4);
+}

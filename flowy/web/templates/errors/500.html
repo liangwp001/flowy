@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}服务器错误 - Flowy管理系统{% endblock %}
+
+{% set breadcrumb_items = [
+    {'title': 'Flowy管理系统', 'url': url_for('flows.list_flows'), 'icon': 'bi-diagram-3'},
+    {'title': '500 错误', 'url': None, 'icon': 'bi-exclamation-triangle'}
+] %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-6 text-center">
+            <div class="error-code">500</div>
+            <h1 class="error-title">服务器内部错误</h1>
+            <p class="error-description">
+                抱歉，服务器遇到了一个错误。请稍后再试或联系管理员。
+            </p>
+            <a href="{{ url_for('flows.list_flows') }}" class="btn btn-primary">
+                <i class="bi bi-house"></i> 返回首页
+            </a>
+            <button type="button" class="btn btn-secondary ms-2" onclick="history.back()">
+                <i class="bi bi-arrow-left"></i> 返回上一页
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}页面未找到 - Flowy管理系统{% endblock %}
+
+{% set breadcrumb_items = [
+    {'title': 'Flowy管理系统', 'url': url_for('flows.list_flows'), 'icon': 'bi-diagram-3'},
+    {'title': '404 错误', 'url': None, 'icon': 'bi-exclamation-triangle'}
+] %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-6 text-center">
+            <div class="error-code">404</div>
+            <h1 class="error-title">页面未找到</h1>
+            <p class="error-description">
+                抱歉，您访问的页面不存在或已被移除。
+            </p>
+            <a href="{{ url_for('flows.list_flows') }}" class="btn btn-primary">
+                <i class="bi bi-house"></i> 返回首页
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
