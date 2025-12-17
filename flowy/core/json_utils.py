@@ -9,6 +9,8 @@ from typing import Any, Union, Dict, List
 from datetime import datetime, date
 import uuid
 
+from sqlalchemy import Enum
+
 
 class JSONUtil:
     """基于orjson的JSON序列化工具类"""
@@ -73,6 +75,10 @@ class JSONUtil:
             return str(obj)
         elif isinstance(obj, set):
             return list(obj)
+        elif hasattr(obj, 'to_dict'):
+            return obj.to_dict()
+        elif hasattr(obj, 'to_json'):
+            return obj.to_json()
         elif hasattr(obj, '__dict__'):
             # 对于自定义对象，尝试序列化其__dict__
             return JSONUtil._prepare_object(obj.__dict__)
