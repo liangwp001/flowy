@@ -25,13 +25,23 @@ class FlowyConfig:
 
     @property
     def database_file(self) -> str:
-        """数据库文件路径"""
+        """主数据库文件路径"""
         return os.path.join(self.database_dir, 'flowy.db')
 
     @property
+    def history_database_file(self) -> str:
+        """历史数据库文件路径"""
+        return os.path.join(self.database_dir, 'flowy_history.db')
+
+    @property
     def database_url(self) -> str:
-        """数据库连接URL"""
+        """主数据库连接URL"""
         return f'sqlite:///{self.database_file}'
+
+    @property
+    def history_database_url(self) -> str:
+        """历史数据库连接URL"""
+        return f'sqlite:///{self.history_database_file}'
 
 
 # 全局配置实例

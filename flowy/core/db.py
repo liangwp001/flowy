@@ -3,15 +3,38 @@
 """Flowy数据库模块"""
 
 import os
+import zlib
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, create_engine, DateTime, Text, INTEGER
+from sqlalchemy import Column, String, create_engine, DateTime, Text, INTEGER, LargeBinary, TypeDecorator
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 from flowy.core.config import get_config
 
 Base = declarative_base()
+HistoryBase = declarative_base()
+
+
+class CompressedText(TypeDecorator):
+    """压缩文本类型，自动压缩和解压缩"""
+    impl = LargeBinary
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        """写入时压缩"""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.encode('utf-8')
+        # 使用最高压缩级别 9，优先考虑压缩率而非速度
+        return zlib.compress(value, level=9)
+
+    def process_result_value(self, value, dialect):
+        """读取时解压"""
+        if value is None:
+            return None
+        return zlib.decompress(value).decode('utf-8')
 
 
 class Trigger(Base):
@@ -36,7 +59,7 @@ class Flow(Base):
     updated_at = Column(DateTime)
 
 
-class FlowHistory(Base):
+class FlowHistory(HistoryBase):
     __tablename__ = 'flow_history'
     id = Column(INTEGER, primary_key=True, autoincrement=True)
     flow_metadata = Column(Text, default="")
@@ -44,12 +67,12 @@ class FlowHistory(Base):
     created_at = Column(DateTime)
     start_time = Column(DateTime)
     end_time = Column(DateTime)
-    input_data = Column(Text)
-    output_data = Column(Text)
+    input_data = Column(CompressedText)
+    output_data = Column(CompressedText)
     status = Column(String(64))
 
 
-class TaskHistory(Base):
+class TaskHistory(HistoryBase):
     __tablename__ = 'task_history'
     id = Column(INTEGER, primary_key=True)
     flow_history_id = Column(INTEGER)
@@ -57,18 +80,19 @@ class TaskHistory(Base):
     created_at = Column(DateTime)
     start_time = Column(DateTime)
     end_time = Column(DateTime)
-    input_data = Column(Text)
-    output_data = Column(Text)
+    input_data = Column(CompressedText)
+    output_data = Column(CompressedText)
     status = Column(String(64))
 
 
 # 延迟初始化的数据库引擎和会话
 _engine = None
+_history_engine = None
 _DBSession = None
 
 
 def _get_engine():
-    """获取数据库引擎（延迟初始化）"""
+    """获取主数据库引擎（延迟初始化）"""
     global _engine
     if _engine is None:
         config = get_config()
@@ -85,11 +109,36 @@ def _get_engine():
     return _engine
 
 
+def _get_history_engine():
+    """获取历史数据库引擎（延迟初始化）"""
+    global _history_engine
+    if _history_engine is None:
+        config = get_config()
+        os.makedirs(config.database_dir, exist_ok=True)
+        _history_engine = create_engine(
+            config.history_database_url,
+            echo=False,
+            pool_pre_ping=True,
+            connect_args={
+                'check_same_thread': False,
+                'timeout': 20
+            }
+        )
+    return _history_engine
+
+
 def _get_session_maker():
     """获取会话工厂（延迟初始化）"""
     global _DBSession
     if _DBSession is None:
-        _DBSession = sessionmaker(bind=_get_engine())
+        # 创建绑定到两个数据库的会话
+        _DBSession = sessionmaker()
+        _DBSession.configure(binds={
+            Flow: _get_engine(),
+            Trigger: _get_engine(),
+            FlowHistory: _get_history_engine(),
+            TaskHistory: _get_history_engine()
+        })
     return _DBSession
 
 
@@ -97,7 +146,10 @@ def init_database() -> None:
     """初始化数据库"""
     config = get_config()
     os.makedirs(config.database_dir, exist_ok=True)
+    # 初始化主数据库
     Base.metadata.create_all(bind=_get_engine())
+    # 初始化历史数据库
+    HistoryBase.metadata.create_all(bind=_get_history_engine())
 
 
 def get_session() -> Session:
