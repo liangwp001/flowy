@@ -40,8 +40,12 @@ def create_app():
 
     @app.template_filter('duration')
     def format_duration(start_time, end_time):
-        if start_time is None or end_time is None:
+        from datetime import datetime
+        if start_time is None:
             return '-'
+        # 如果 end_time 为 None（运行中），使用当前时间
+        if end_time is None:
+            end_time = datetime.now()
         duration = end_time - start_time
         total_seconds = int(duration.total_seconds())
         hours, remainder = divmod(total_seconds, 3600)

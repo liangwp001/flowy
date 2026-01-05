@@ -3,11 +3,19 @@
     <ol class="breadcrumb">
         {% for item in breadcrumb_items %}
             {% if loop.last %}
-                <li class="breadcrumb-item active" aria-current="page">{{ item.title }}</li>
-            {% else %}
-                <li class="breadcrumb-item">
+                <li class="breadcrumb-item active" aria-current="page" {% if item.id %}id="{{ item.id }}"{% endif %}>
                     {% if item.url %}
-                        <a href="{{ item.url }}" {% if item.icon %}class="text-decoration-none"{% endif %}>
+                        <a href="{{ item.url }}" class="text-decoration-none breadcrumb-active-link">
+                            {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.title }}
+                        </a>
+                    {% else %}
+                        {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.title }}
+                    {% endif %}
+                </li>
+            {% else %}
+                <li class="breadcrumb-item" {% if item.id %}id="{{ item.id }}"{% endif %}>
+                    {% if item.url %}
+                        <a href="{{ item.url }}" {% if item.icon %}class="text-decoration-none"{% endif %}{% if request.args.get('in_sidebar') == '1' %} target="_blank" rel="noopener"{% endif %}>
                             {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.title }}
                         </a>
                     {% else %}
@@ -36,6 +44,16 @@
 .breadcrumb-item.active {
     color: #495057;
     font-weight: 500;
+}
+
+.breadcrumb-item.active a.breadcrumb-active-link {
+    color: #495057;
+    font-weight: 500;
+}
+
+.breadcrumb-item.active a.breadcrumb-active-link:hover {
+    color: #0a58ca;
+    text-decoration: underline !important;
 }
 
 .breadcrumb-item a {

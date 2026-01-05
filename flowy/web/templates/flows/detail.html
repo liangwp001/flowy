@@ -470,6 +470,19 @@
                         </div>
                         <div class="invalid-feedback">请输入有效的JSON格式</div>
                     </div>
+
+                    <!-- 最大实例数 -->
+                    <div class="mb-3">
+                        <label for="triggerMaxInstances" class="form-label">
+                            <i class="bi bi-layers"></i> 最大并发实例数
+                        </label>
+                        <input type="number" class="form-control" id="triggerMaxInstances"
+                               min="1" value="1" placeholder="默认为 1">
+                        <div class="form-text">
+                            同一时间最多允许的并发执行实例数。设置为 1 表示不允许并发执行。
+                        </div>
+                        <div class="invalid-feedback">请输入大于等于 1 的整数</div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -1157,6 +1170,11 @@ function renderTriggersList(triggers) {
                             <code class="detail-value">${escapeHtml(trigger.cron_expression)}</code>
                         </div>
                         <div class="trigger-detail-item">
+                            <i class="bi bi-layers"></i>
+                            <span class="detail-label">最大并发:</span>
+                            <span class="detail-value">${trigger.max_instances || 1} 个实例</span>
+                        </div>
+                        <div class="trigger-detail-item">
                             <i class="bi bi-calendar-plus"></i>
                             <span class="detail-label">创建时间:</span>
                             <span class="detail-value">${formatDateTime(trigger.created_at)}</span>
@@ -1166,8 +1184,8 @@ function renderTriggersList(triggers) {
                         <button type="button" class="btn-action edit" onclick="editTrigger(${trigger.id})" title="编辑">
                             <i class="bi bi-pencil"></i>
                         </button>
-                        <button type="button" class="btn-action toggle ${trigger.enabled ? 'enabled' : 'disabled'}" 
-                                onclick="toggleTrigger(${trigger.id}, ${!trigger.enabled})" 
+                        <button type="button" class="btn-action toggle ${trigger.enabled ? 'enabled' : 'disabled'}"
+                                onclick="toggleTrigger(${trigger.id}, ${!trigger.enabled})"
                                 title="${trigger.enabled ? '禁用' : '启用'}">
                             <i class="bi bi-${trigger.enabled ? 'pause-circle' : 'play-circle'}"></i>
                         </button>
@@ -1196,6 +1214,7 @@ function showCreateTriggerModal() {
     document.getElementById('triggerForm').reset();
     document.getElementById('triggerId').value = '';
     document.getElementById('triggerModalTitle').textContent = '创建触发器';
+    document.getElementById('triggerMaxInstances').value = '1';  // 默认值为 1
 
     // 移除验证状态
     document.getElementById('triggerForm').classList.remove('was-validated');
@@ -1225,6 +1244,7 @@ function editTrigger(triggerId) {
                 document.getElementById('triggerName').value = trigger.name;
                 document.getElementById('triggerDescription').value = trigger.description || '';
                 document.getElementById('triggerCron').value = trigger.cron_expression;
+                document.getElementById('triggerMaxInstances').value = trigger.max_instances || 1;
 
                 // 格式化JSON参数
                 if (trigger.trigger_params) {
@@ -1313,6 +1333,7 @@ function saveTrigger() {
     const description = document.getElementById('triggerDescription').value.trim();
     const cronExpression = document.getElementById('triggerCron').value.trim();
     const paramsText = document.getElementById('triggerParams').value.trim();
+    const maxInstances = parseInt(document.getElementById('triggerMaxInstances').value) || 1;
 
     // 客户端验证
     if (!name) {
@@ -1324,6 +1345,12 @@ function saveTrigger() {
     if (!cronExpression) {
         document.getElementById('triggerCron').classList.add('is-invalid');
         showToast('请输入Cron表达式', 'error');
+        return;
+    }
+
+    if (maxInstances < 1) {
+        document.getElementById('triggerMaxInstances').classList.add('is-invalid');
+        showToast('最大实例数必须大于等于 1', 'error');
         return;
     }
 
@@ -1343,6 +1370,7 @@ function saveTrigger() {
     document.getElementById('triggerName').classList.remove('is-invalid');
     document.getElementById('triggerCron').classList.remove('is-invalid');
     document.getElementById('triggerParams').classList.remove('is-invalid');
+    document.getElementById('triggerMaxInstances').classList.remove('is-invalid');
 
     // 禁用保存按钮
     const saveBtn = document.getElementById('saveTriggerBtn');
@@ -1356,7 +1384,8 @@ function saveTrigger() {
         name: name,
         description: description,
         cron_expression: cronExpression,
-        trigger_params: triggerParams
+        trigger_params: triggerParams,
+        max_instances: maxInstances
     };
 
     // 判断是创建还是更新

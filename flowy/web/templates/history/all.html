@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}执行历史 - Flowy管理系统{% endblock %}
+
+{% set breadcrumb_items = [
+    {'title': 'Flowy管理系统', 'url': url_for('flows.list_flows'), 'icon': 'bi-diagram-3'},
+    {'title': '执行历史', 'url': url_for('flows.all_history'), 'icon': 'bi-clock-history'},
+    {'title': current_flow.name if current_flow else '全部', 'url': url_for('flows.flow_detail', flow_id=current_flow_id) if current_flow else None, 'icon': 'bi-diagram-3', 'id': 'breadcrumb-flow-name'}
+] %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/all-history.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="all-history-container">
+    <!-- 折叠/展开按钮 -->
+    <button class="sidebar-toggle-btn" id="sidebarToggle" title="折叠/展开侧边栏">
+        <i class="bi bi-chevron-left"></i>
+    </button>
+
+    <!-- 左侧侧边栏 - Flow列表 -->
+    <aside class="flow-sidebar" id="flowSidebar">
+        <div class="sidebar-header">
+            <h3 class="sidebar-title">
+                <i class="bi bi-diagram-3"></i>
+                Flow列表
+            </h3>
+            <span class="sidebar-count">{{ flows|length }} 个</span>
+        </div>
+
+        <!-- 搜索框 -->
+        <div class="sidebar-search">
+            <div class="search-input-wrapper">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" id="flowSearchInput" class="search-input" placeholder="搜索Flow...">
+            </div>
+        </div>
+
+        <!-- Flow列表 -->
+        <div class="flow-list" id="flowList">
+            {% for item in flows %}
+            {% set flow = item.flow %}
+            {% set stats = item.stats %}
+            <div class="flow-item {% if flow.id == current_flow_id %}active{% endif %}"
+                 data-flow-id="{{ flow.id }}"
+                 data-flow-name="{{ flow.name|lower }}"
+                 onclick="selectFlow('{{ flow.id }}')">
+                <div class="flow-item-header">
+                    <div class="flow-item-name">
+                        <i class="bi bi-diagram-3 flow-icon"></i>
+                        <span class="name-text">{{ flow.name }}</span>
+                    </div>
+                    {% if stats.running_count > 0 %}
+                    <span class="running-indicator" title="运行中">
+                        <span class="running-dot"></span>
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flow-item-meta">
+                    <span class="meta-count">
+                        <i class="bi bi-bar-chart"></i>
+                        {{ stats.total_count }} 次
+                    </span>
+                    <span class="meta-rate {% if stats.success_rate >= 80 %}high{% elif stats.success_rate >= 50 %}medium{% else %}low{% endif %}">
+                        {{ stats.success_rate }}%
+                    </span>
+                </div>
+                {% if flow.description %}
+                <div class="flow-item-desc">{{ flow.description }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </aside>
+
+    <!-- 右侧主区域 - iframe加载现有历史页面 -->
+    <main class="history-main">
+        {% if current_flow %}
+        <iframe id="historyFrame"
+                class="history-frame"
+                src="{{ url_for('flows.flow_history', flow_id=current_flow_id, in_sidebar=1) }}"
+                frameborder="0">
+        </iframe>
+        {% else %}
+        <!-- 无Flow时的空状态 -->
+        <div class="empty-state-large">
+            <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3>暂无Flow</h3>
+            <p>请先创建并执行Flow，它们将显示在这里</p>
+        </div>
+        {% endif %}
+    </main>
+</div>
+
+<script>
+// 为 body 添加 class，防止双滚动条
+document.body.classList.add('all-history-page');
+
+// 当前选中的Flow ID
+let currentFlowId = '{{ current_flow_id or '' }}';
+// 侧边栏折叠状态
+let isSidebarCollapsed = false;
+
+// 切换侧边栏折叠/展开状态
+function toggleSidebar() {
+    const sidebar = document.getElementById('flowSidebar');
+    const toggleBtn = document.getElementById('sidebarToggle');
+
+    isSidebarCollapsed = !isSidebarCollapsed;
+
+    if (isSidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        toggleBtn.classList.add('collapsed');
+        toggleBtn.title = '展开侧边栏';
+    } else {
+        sidebar.classList.remove('collapsed');
+        toggleBtn.classList.remove('collapsed');
+        toggleBtn.title = '折叠侧边栏';
+    }
+
+    // 保存折叠状态到 localStorage
+    localStorage.setItem('sidebarCollapsed', isSidebarCollapsed);
+
+    // 触发 resize 事件，让 iframe 重新调整大小
+    setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+    }, 300);
+}
+
+// 页面加载时恢复折叠状态
+function restoreSidebarState() {
+    const savedState = localStorage.getItem('sidebarCollapsed');
+    if (savedState === 'true') {
+        isSidebarCollapsed = false; // toggleSidebar 会反转它
+        toggleSidebar();
+    }
+}
+
+// 选择Flow - 更新iframe的src
+function selectFlow(flowId) {
+    if (flowId === currentFlowId) return;
+
+    // 更新选中状态
+    document.querySelectorAll('.flow-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    const selectedItem = document.querySelector(`.flow-item[data-flow-id="${flowId}"]`);
+    if (selectedItem) {
+        selectedItem.classList.add('active');
+
+        // 更新面包屑导航中的 Flow 名称和链接
+        const flowName = selectedItem.querySelector('.name-text').textContent;
+        const breadcrumbFlowName = document.getElementById('breadcrumb-flow-name');
+        if (breadcrumbFlowName) {
+            const link = breadcrumbFlowName.querySelector('a');
+            if (link) {
+                link.textContent = flowName;
+                link.href = `/flows/${flowId}`;
+            } else {
+                breadcrumbFlowName.textContent = flowName;
+            }
+        }
+    }
+
+    // 更新iframe的src
+    const iframe = document.getElementById('historyFrame');
+    if (iframe) {
+        iframe.src = `/flows/${flowId}/history?in_sidebar=1`;
+        currentFlowId = flowId;
+    }
+}
+
+// 搜索Flow
+document.addEventListener('DOMContentLoaded', function() {
+    // 恢复侧边栏状态
+    restoreSidebarState();
+
+    // 折叠按钮点击事件
+    const toggleBtn = document.getElementById('sidebarToggle');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', toggleSidebar);
+    }
+
+    const searchInput = document.getElementById('flowSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            document.querySelectorAll('.flow-item').forEach(item => {
+                const flowName = item.dataset.flowName || '';
+                if (flowName.includes(searchTerm)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // iframe加载完成后的处理
+    const iframe = document.getElementById('historyFrame');
+    if (iframe) {
+        iframe.addEventListener('load', function() {
+            try {
+                // 向iframe发送消息，通知它是在侧边栏中
+                iframe.contentWindow.postMessage({
+                    type: 'sidebarMode',
+                    sidebarMode: true
+                }, '*');
+            } catch (e) {
+                console.log('无法访问iframe内容（可能是跨域问题）');
+            }
+        });
+    }
+});
+
+// 监听iframe内部的消息（用于处理链接点击等）
+window.addEventListener('message', function(event) {
+    // 处理来自iframe的消息
+    if (event.data.type === 'navigateToDetail') {
+        // 在新标签页打开详情页
+        window.open(event.data.url, '_blank');
+    } else if (event.data.type === 'triggerFlow') {
+        // 刷新iframe以显示最新的执行状态
+        const iframe = document.getElementById('historyFrame');
+        if (iframe) {
+            iframe.src = iframe.src;
+        }
+    }
+});
+</script>
+{% endblock %}

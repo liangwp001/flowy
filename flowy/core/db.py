@@ -45,6 +45,7 @@ class Trigger(Base):
     description = Column(String(256))
     cron_expression = Column(String(128))
     trigger_params = Column(Text)
+    max_instances = Column(INTEGER, default=1)
     enabled = Column(INTEGER, default=1)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
@@ -83,6 +84,9 @@ class TaskHistory(HistoryBase):
     input_data = Column(CompressedText)
     output_data = Column(CompressedText)
     status = Column(String(64))
+    progress = Column(INTEGER)  # 进度百分比 (0-100)，NULL 表示未设置
+    progress_message = Column(String(256))  # 进度描述信息
+    progress_updated_at = Column(DateTime)  # 进度最后更新时间
 
 
 # 延迟初始化的数据库引擎和会话
@@ -143,13 +147,34 @@ def _get_session_maker():
 
 
 def init_database() -> None:
-    """初始化数据库"""
+    """初始化数据库并执行待处理的迁移"""
+    from pathlib import Path
+
     config = get_config()
     os.makedirs(config.database_dir, exist_ok=True)
+
+    history_db_path = Path(config.history_database_file)
+    is_new_database = not history_db_path.exists()
+
     # 初始化主数据库
     Base.metadata.create_all(bind=_get_engine())
-    # 初始化历史数据库
+    # 初始化历史数据库（创建基础表结构）
     HistoryBase.metadata.create_all(bind=_get_history_engine())
+
+    # 如果是全新数据库，不需要迁移（字段已通过 create_all 创建）
+    if is_new_database:
+        # 记录初始版本为最新迁移版本
+        from flowy.core.migration_manager import get_migration_manager
+        manager = get_migration_manager()
+        if manager.get_migration_files():
+            manager.create_migrations_table()
+            # 标记所有迁移为已执行
+            for version, migration_cls in sorted(manager.get_migration_files().items()):
+                migration = migration_cls()
+                manager.record_migration(None, migration)
+    else:
+        # 现有数据库，执行待处理的迁移
+        run_pending_migrations()
 
 
 def get_session() -> Session:
@@ -265,3 +290,100 @@ def update_task_history(
         if status is not None:
             task_history.status = status
     return task_history
+
+
+def update_task_progress(
+        session: Session,
+        task_id: int,
+        progress: int,
+        progress_message: Optional[str] = None
+) -> Optional[TaskHistory]:
+    """更新任务进度
+
+    Args:
+        session: 数据库会话
+        task_id: 任务ID
+        progress: 进度百分比 (0-100)
+        progress_message: 进度描述信息（可选）
+
+    Returns:
+        更新后的 TaskHistory 对象，如果任务不存在则返回 None
+    """
+    task_history = session.query(TaskHistory).filter(TaskHistory.id == task_id).first()
+    if task_history:
+        task_history.progress = progress
+        task_history.progress_message = progress_message
+        task_history.progress_updated_at = datetime.now()
+    return task_history
+
+
+def get_running_tasks(
+        session: Session,
+        flow_history_id: int
+) -> list[TaskHistory]:
+    """获取指定流程历史中正在运行的任务
+
+    Args:
+        session: 数据库会话
+        flow_history_id: 流程历史ID
+
+    Returns:
+        正在运行的任务列表
+    """
+    return session.query(TaskHistory).filter(
+        TaskHistory.flow_history_id == flow_history_id,
+        TaskHistory.status == 'running'
+    ).all()
+
+
+# ============================================
+# 数据库迁移便捷函数
+# ============================================
+
+def run_pending_migrations(silent: bool = False) -> tuple[int, int, list[str]]:
+    """执行待处理的数据库迁移
+
+    Args:
+        silent: 是否静默模式（不打印输出）
+
+    Returns:
+        (成功数量, 失败数量, 错误信息列表)
+    """
+    from flowy.core.migration_manager import run_pending_migrations as _run
+
+    if not silent:
+        from flowy.core.config import get_config
+        config = get_config()
+        print(f'检查数据库迁移: {config.history_database_file}')
+
+    success, failed, errors = _run()
+
+    if not silent:
+        if success > 0:
+            print(f'成功执行 {success} 个迁移')
+        if failed > 0:
+            print(f'迁移失败: {", ".join(errors)}')
+
+    return success, failed, errors
+
+
+def get_migration_history() -> list[dict]:
+    """获取迁移历史记录
+
+    Returns:
+        迁移历史列表，每个元素包含 version, name, description, applied_at
+    """
+    from flowy.core.migration_manager import get_migration_manager
+    manager = get_migration_manager()
+    return manager.get_migration_history()
+
+
+def get_current_db_version() -> str | None:
+    """获取当前数据库版本
+
+    Returns:
+        当前数据库版本号，如果数据库不存在或未执行过迁移则返回 None
+    """
+    from flowy.core.migration_manager import get_migration_manager
+    manager = get_migration_manager()
+    return manager.get_current_version()

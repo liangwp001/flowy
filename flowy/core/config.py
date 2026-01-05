@@ -13,6 +13,14 @@ class FlowyConfig:
     # 数据目录，默认为当前工作目录下的 data 文件夹
     data_dir: str = field(default_factory=lambda: os.path.join(os.getcwd(), 'data'))
 
+    # 历史数据清理配置
+    enable_history_cleanup: bool = False  # 是否启用历史数据自动清理，默认关闭
+    history_retention_days: int = 60  # 历史数据保留天数，默认60天
+
+    # 调度器配置
+    scheduler_max_workers: int = 10  # 调度器线程池最大工作线程数
+    scheduler_timezone: str = 'Asia/Shanghai'  # 调度器时区
+
     @property
     def database_dir(self) -> str:
         """数据库目录"""

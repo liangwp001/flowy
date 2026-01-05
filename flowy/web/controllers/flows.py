@@ -126,6 +126,47 @@ def history_detail(history_id):
         return redirect(url_for('flows.list_flows'))
 
 
+@flows_bp.route('/all-history')
+@flows_bp.route('/all-history/<flow_id>')
+def all_history(flow_id=None):
+    """所有Flow的执行历史页面（侧边栏布局）"""
+    try:
+        # 获取所有Flow及其统计信息
+        flows = FlowService.get_all_flows_with_stats()
+
+        # 如果没有指定flow_id，默认选择第一个有执行记录的Flow
+        if not flow_id and flows:
+            # 优先选择有执行记录的Flow
+            for flow in flows:
+                if flow['stats']['total_count'] > 0:
+                    flow_id = flow['flow'].id
+                    break
+            # 如果都没有执行记录，选择第一个Flow
+            if not flow_id and flows:
+                flow_id = flows[0]['flow'].id
+
+        # 获取当前选中Flow的信息
+        current_flow = None
+        current_stats = None
+        if flow_id:
+            for flow in flows:
+                if flow['flow'].id == flow_id:
+                    current_flow = flow['flow']
+                    current_stats = flow['stats']
+                    break
+
+        return render_template(
+            'history/all.html',
+            flows=flows,
+            current_flow_id=flow_id,
+            current_flow=current_flow,
+            current_stats=current_stats
+        )
+    except Exception as e:
+        flash(f'加载执行历史失败: {str(e)}', 'error')
+        return redirect(url_for('flows.list_flows'))
+
+
 @flows_bp.route('/api/history/<int:history_id>/logs')
 def api_get_history_logs(history_id):
     """获取执行历史的日志内容"""
@@ -196,10 +237,82 @@ def api_flow_chart_data(flow_id):
         }), 500
 
 
+@flows_bp.route('/api/history/<int:history_id>/tasks')
+def api_history_tasks(history_id):
+    """获取执行历史的任务列表API"""
+    try:
+        task_histories = FlowService.get_task_histories(history_id)
+
+        # 转换为字典格式
+        tasks_data = []
+        for task in task_histories:
+            # 计算运行时长
+            duration = None
+            if task.start_time and task.end_time:
+                duration = (task.end_time - task.start_time).total_seconds()
+            elif task.start_time:
+                # 运行中的任务
+                duration = (datetime.now() - task.start_time).total_seconds()
+
+            tasks_data.append({
+                'id': task.id,
+                'name': task.name,
+                'status': task.status,
+                'progress': task.progress,
+                'progress_message': task.progress_message,
+                'progress_updated_at': task.progress_updated_at.isoformat() if task.progress_updated_at else None,
+                'created_at': task.created_at.isoformat() if task.created_at else None,
+                'start_time': task.start_time.isoformat() if task.start_time else None,
+                'end_time': task.end_time.isoformat() if task.end_time else None,
+                'duration': duration,
+                'has_input': bool(task.input_data),
+                'has_output': bool(task.output_data)
+            })
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'tasks': tasks_data
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@flows_bp.route('/api/tasks/<int:task_id>/data')
+def api_task_data(task_id):
+    """获取任务输入输出数据API"""
+    try:
+        from flowy.core.json_utils import json
+
+        task_data = FlowService.get_task_data(task_id)
+
+        if not task_data:
+            return jsonify({
+                'success': False,
+                'error': '任务不存在'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'data': task_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @flows_bp.route('/api/flows/<flow_id>/history')
 def api_flow_history(flow_id):
     """获取Flow执行历史API"""
     try:
+        from flowy.core.json_utils import json
+
         per_page = request.args.get('per_page', 10, type=int)
         page = request.args.get('page', 1, type=int)
         status_filter = request.args.get('status')
@@ -214,13 +327,25 @@ def api_flow_history(flow_id):
         # 转换为字典格式
         histories_data = []
         for h in histories:
+            # 解析触发器信息
+            trigger_name = None
+            if hasattr(h, 'trigger_name'):
+                trigger_name = h.trigger_name
+            elif h.flow_metadata:
+                try:
+                    metadata = json.loads(h.flow_metadata)
+                    trigger_name = metadata.get('trigger_name')
+                except (ValueError, TypeError):
+                    pass
+
             histories_data.append({
                 'id': h.id,
                 'status': h.status,
                 'created_at': h.created_at.isoformat() if h.created_at else None,
                 'start_time': h.start_time.isoformat() if h.start_time else None,
                 'end_time': h.end_time.isoformat() if h.end_time else None,
-                'flow_name': flow_id
+                'flow_name': flow_id,
+                'trigger_name': trigger_name
             })
 
         return jsonify({

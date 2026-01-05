@@ -9,8 +9,9 @@ from functools import wraps
 from flowy.core.json_utils import json
 
 from flowy.core.context import get_flow_history_id
-from flowy.core.db import get_session, create_task_history, update_task_history
+from flowy.core.db import get_session, create_task_history, update_task_history, update_task_progress
 from flowy.core.logger import get_flow_logger
+from flowy.core.progress import set_task_history_id
 
 
 def task(name=None, desc=None):
@@ -62,6 +63,19 @@ def task(name=None, desc=None):
                     )
                     session.commit()
                     task_history_id = task_history.id
+                    # 设置任务ID到上下文，供 set_progress 使用
+                    set_task_history_id(task_history_id)
+                    # 自动设置初始进度为 0
+                    try:
+                        update_task_progress(
+                            session=session,
+                            task_id=task_history_id,
+                            progress=0,
+                            progress_message='准备执行...'
+                        )
+                        session.commit()
+                    except Exception as progress_error:
+                        logger.warning(f"设置初始进度失败: {progress_error}")
                 except Exception as e:
                     session.rollback()
                     logger.error(f"创建任务历史失败: {e}")
@@ -84,8 +98,6 @@ def task(name=None, desc=None):
                     end_time = datetime.now()
                     session = get_session()
                     try:
-                        output_data_json = None
-
                         if error_msg:
                             # 如果有执行错误，记录错误信息
                             output_data = {
@@ -132,6 +144,14 @@ def task(name=None, desc=None):
                                 output_data=output_data_json,
                                 status=status
                             )
+                            # 任务成功完成时，自动设置进度为 100
+                            if status == 'completed':
+                                update_task_progress(
+                                    session=session,
+                                    task_id=task_history_id,
+                                    progress=100,
+                                    progress_message='执行完成'
+                                )
                             session.commit()
                         except Exception as db_error:
                             session.rollback()
@@ -141,6 +161,8 @@ def task(name=None, desc=None):
                         logger.error(f"更新任务历史失败: {e}")
                     finally:
                         session.close()
+                # 清除任务上下文
+                set_task_history_id(None)
                 logger.info(f'{"-" * 50} task {task_name} end {"-" * 50}')
 
         return wrapper

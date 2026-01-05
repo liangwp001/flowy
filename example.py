@@ -3,7 +3,7 @@ Flowy 多步骤工作流示例
 演示如何使用框架构建一个完整的数据处理工作流
 """
 
-from flowy import flow, task, run, get_flow_logger
+from flowy import flow, task, run, get_flow_logger, set_progress
 import time
 
 
@@ -33,17 +33,35 @@ def transform_data(data: dict) -> dict:
     """转换数据格式"""
     logger = get_flow_logger()
     logger.info(f"开始转换数据")
-    
-    # 模拟数据处理
-    time.sleep(1)
-    
+
+    # 更新进度：开始转换
+    set_progress(10, "准备转换数据...")
+
+    # 模拟数据处理步骤
+    time.sleep(0.5)
+    set_progress(30, "转换名称字段...")
+
+    time.sleep(0.3)
+    name = data['name'].upper()
+    set_progress(50, "计算出生年份...")
+
+    time.sleep(0.3)
+    birth_year = 2025 - data['age']
+    set_progress(70, "判断是否成年...")
+
+    time.sleep(0.2)
+    is_adult = data['age'] >= 18
+    set_progress(90, "整合转换结果...")
+
+    time.sleep(0.1)
     transformed = {
-        'name': data['name'].upper(),
+        'name': name,
         'age': data['age'],
-        'birth_year': 2025 - data['age'],
-        'is_adult': data['age'] >= 18
+        'birth_year': birth_year,
+        'is_adult': is_adult
     }
-    
+
+    set_progress(100, "数据转换完成")
     logger.info(f"数据转换完成: {transformed}")
     return transformed
 
@@ -53,17 +71,28 @@ def enrich_data(data: dict) -> dict:
     """丰富数据，添加额外信息"""
     logger = get_flow_logger()
     logger.info(f"开始丰富数据")
-    
-    # 模拟数据丰富过程
-    time.sleep(1)
-    
+
+    # 更新进度
+    set_progress(20, "计算代际信息...")
+    time.sleep(0.3)
+    generation = get_generation(data['birth_year'])
+
+    set_progress(50, "判断年龄段...")
+    time.sleep(0.3)
+    age_group = get_age_group(data['age'])
+
+    set_progress(80, "添加处理时间戳...")
+    time.sleep(0.2)
+    processed_at = time.strftime('%Y-%m-%d %H:%M:%S')
+
+    set_progress(100, "数据丰富完成")
     enriched = {
         **data,
-        'generation': get_generation(data['birth_year']),
-        'age_group': get_age_group(data['age']),
-        'processed_at': time.strftime('%Y-%m-%d %H:%M:%S')
+        'generation': generation,
+        'age_group': age_group,
+        'processed_at': processed_at
     }
-    
+
     logger.info(f"数据丰富完成: {enriched}")
     return enriched
 
@@ -88,18 +117,52 @@ def save_data(data: dict) -> dict:
     """保存数据（模拟）"""
     logger = get_flow_logger()
     logger.info(f"开始保存数据")
-    
+
     # 模拟保存到数据库
     time.sleep(1)
-    
+
     result = {
         **data,
         'saved': True,
         'record_id': f"REC_{int(time.time())}"
     }
-    
+
     logger.info(f"数据保存成功，记录ID: {result['record_id']}")
     return result
+
+
+@task(name="批量数据处理", desc="批量处理多个数据项")
+def batch_process_data(items: list) -> list:
+    """批量处理数据列表，展示进度更新
+
+    这个任务展示了如何在循环中更新进度。
+    """
+    logger = get_flow_logger()
+    logger.info(f"开始批量处理 {len(items)} 个数据项")
+
+    total = len(items)
+    results = []
+
+    for i, item in enumerate(items):
+        # 计算当前进度
+        progress = int((i + 1) / total * 100)
+        set_progress(progress, f"正在处理第 {i + 1}/{total} 项: {item.get('name', 'Unknown')}")
+
+        # 模拟处理单个项目
+        time.sleep(0.8)
+
+        # 处理项目
+        processed = {
+            **item,
+            'birth_year': 2025 - item['age'],
+            'is_adult': item['age'] >= 18,
+            'processed_at': time.strftime('%Y-%m-%d %H:%M:%S')
+        }
+        results.append(processed)
+
+    set_progress(100, f"批量处理完成，共处理 {total} 项")
+    logger.info(f"批量处理完成: {len(results)} 个项目")
+    return results
 
 
 # ============ 辅助函数 ============
@@ -136,78 +199,74 @@ def get_age_group(age: int) -> str:
 def data_processing_flow(name: str, age: int) -> dict:
     """
     多步骤数据处理工作流
-    
+
     步骤：
     1. 验证输入数据
     2. 转换数据格式
     3. 丰富数据（添加计算字段）
     4. 验证输出数据
     5. 保存数据
-    
+
     Args:
         name: 人员名称
         age: 人员年龄
-    
+
     Returns:
         处理后的完整数据
     """
     logger = get_flow_logger()
     logger.info(f"工作流开始执行，输入参数: name={name}, age={age}")
-    
+
     # 步骤1: 验证输入数据
     input_data = {'name': name, 'age': age}
     validated_data = validate_data(input_data)
-    
-    # 步骤2: 转换数据
+
+    # 步骤2: 转换数据（带进度更新）
     transformed_data = transform_data(validated_data)
-    
-    # 步骤3: 丰富数据
+
+    # 步骤3: 丰富数据（带进度更新）
     enriched_data = enrich_data(transformed_data)
-    
+
     # 步骤4: 验证输出
     validated_output = validate_output(enriched_data)
-    
+
     # 步骤5: 保存数据
     final_result = save_data(validated_output)
-    
+
     logger.info(f"工作流执行完成")
     return final_result
+
+
+@flow(flow_id="batch_processing_flow", name="批量数据处理工作流", desc="批量处理多个数据项的工作流")
+def batch_processing_flow(items: list) -> dict:
+    """
+    批量数据处理工作流
+
+    这个工作流展示了如何在处理列表时更新进度。
+
+    Args:
+        items: 要处理的数据列表，每个元素是包含 name 和 age 的字典
+
+    Returns:
+        处理结果摘要
+    """
+    logger = get_flow_logger()
+    logger.info(f"批量处理工作流开始，共 {len(items)} 个项目")
+
+    # 批量处理数据（带进度更新）
+    processed_items = batch_process_data(items)
+
+    result = {
+        'total_processed': len(processed_items),
+        'items': processed_items,
+        'completed_at': time.strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+    logger.info(f"批量处理工作流完成")
+    return result
 
 
 # ============ 主程序 ============
 
 if __name__ == '__main__':
-    import sys
-    
-    # 执行工作流示例
-    print("=" * 60)
-    print("Flowy 多步骤工作流示例")
-    print("=" * 60)
-    
-    # 示例1: 成功的工作流执行
-    print("\n【示例1】执行成功的工作流:")
-    print("-" * 60)
-    try:
-        result = data_processing_flow(name="张三", age=28)
-        print(f"\n✓ 工作流执行成功!")
-        print(f"结果: {result}")
-    except Exception as e:
-        print(f"\n✗ 工作流执行失败: {e}")
-    
-    # 示例2: 数据验证失败
-    print("\n\n【示例2】数据验证失败的工作流:")
-    print("-" * 60)
-    try:
-        result = data_processing_flow(name="李四", age=-5)
-        print(f"\n✓ 工作流执行成功!")
-        print(f"结果: {result}")
-    except Exception as e:
-        print(f"\n✗ 工作流执行失败（预期行为）: {e}")
-    
-    # 示例3: 启动Web管理界面
-    print("\n\n【示例3】启动Web管理界面:")
-    print("-" * 60)
-    print("访问 http://127.0.0.1:5000 查看工作流历史和执行详情")
-    print("按 Ctrl+C 停止服务器\n")
-    
     run(host='127.0.0.1', port=5000, debug=True)

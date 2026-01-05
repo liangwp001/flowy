@@ -1,4 +1,6 @@
-{% macro pagination(current_page, total_pages, base_url, search=None, status=None, flow_id=None, start_date=None, end_date=None, total_count=None, per_page=30) -%}
+{% macro pagination(current_page, total_pages, base_url, search=None, status=None, flow_id=None, start_date=None, end_date=None, total_count=None, per_page=30, in_sidebar=None) -%}
+{# 处理 in_sidebar 参数：如果为 True，转换为 '1' #}
+{% set sidebar_param = '1' if in_sidebar else none %}
 <!-- 分页信息 -->
 {% if total_count %}
 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -11,10 +13,10 @@
             每页 {{ per_page }} 条
         </button>
         <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=20, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">20 条</a></li>
-            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=30, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">30 条</a></li>
-            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=50, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">50 条</a></li>
-            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=100, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">100 条</a></li>
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=20, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">20 条</a></li>
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=30, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">30 条</a></li>
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=50, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">50 条</a></li>
+            <li><a class="dropdown-item" href="{{ url_for(base_url, page=1, per_page=100, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">100 条</a></li>
         </ul>
     </div>
 </div>
@@ -26,7 +28,7 @@
         <!-- 上一页 -->
         {% if current_page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for(base_url, page=current_page-1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">
+                <a class="page-link" href="{{ url_for(base_url, page=current_page-1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">
                     <i class="bi bi-chevron-left"></i> 上一页
                 </a>
             </li>
@@ -42,7 +44,7 @@
 
         {% if start_page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for(base_url, page=1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">1</a>
+                <a class="page-link" href="{{ url_for(base_url, page=1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">1</a>
             </li>
             {% if start_page > 2 %}
                 <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -56,7 +58,7 @@
                 </li>
             {% else %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for(base_url, page=page, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">{{ page }}</a>
+                    <a class="page-link" href="{{ url_for(base_url, page=page, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">{{ page }}</a>
                 </li>
             {% endif %}
         {% endfor %}
@@ -66,14 +68,14 @@
                 <li class="page-item disabled"><span class="page-link">...</span></li>
             {% endif %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for(base_url, page=total_pages, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">{{ total_pages }}</a>
+                <a class="page-link" href="{{ url_for(base_url, page=total_pages, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">{{ total_pages }}</a>
             </li>
         {% endif %}
 
         <!-- 下一页 -->
         {% if current_page < total_pages %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for(base_url, page=current_page+1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date) }}">
+                <a class="page-link" href="{{ url_for(base_url, page=current_page+1, search=search, status=status, flow_id=flow_id, start_date=start_date, end_date=end_date, in_sidebar=sidebar_param) }}">
                     下一页 <i class="bi bi-chevron-right"></i>
                 </a>
             </li>

@@ -15,6 +15,112 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/json-viewer.css') }}">
 <style>
 /* 临时样式用于额外的微调 */
+
+/* 任务进度条样式 */
+.task-progress-section {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    border-left: 3px solid #3b82f6;
+}
+
+.task-progress-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.task-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-progress-label {
+    font-size: 0.875rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.task-progress-percent {
+    font-size: 0.875rem;
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+.task-progress-bar {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.task-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #6366f1);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.task-progress-fill.animated {
+    background: linear-gradient(90deg, #3b82f6, #6366f1, #3b82f6);
+    background-size: 200% 100%;
+    animation: progressShimmer 1.5s infinite;
+}
+
+@keyframes progressShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.task-progress-message {
+    font-size: 0.75rem;
+    color: #64748b;
+    padding-left: 0.5rem;
+}
+
+.task-progress-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.task-progress-loading .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 触发方式徽章 */
+.trigger-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.trigger-badge.trigger-manual {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.trigger-badge.trigger-scheduled {
+    background: #fef3c7;
+    color: #92400e;
+}
 </style>
 {% endblock %}
 
@@ -57,6 +163,13 @@
                 </div>
 
                 <!-- 第二行 -->
+                <div class="info-item">
+                    <div class="info-label">触发方式</div>
+                    <div class="info-value" id="triggerType">
+                        <i class="bi bi-hourglass-split"></i>
+                        加载中...
+                    </div>
+                </div>
                 <div class="info-item">
                     <div class="info-label">开始时间</div>
                     <div class="info-value">{{ flow_history.start_time|datetime if flow_history.start_time else '-' }}</div>
@@ -218,6 +331,31 @@
                                 </span>
                             </div>
                         </div>
+
+                        <!-- 任务进度显示（仅运行中的任务） -->
+                        {% if task.status == 'running' %}
+                        <div class="task-progress-section" data-task-id="{{ task.id }}">
+                            {% if task.progress is not none %}
+                            <div class="task-progress-wrapper">
+                                <div class="task-progress-header">
+                                    <span class="task-progress-label">执行进度</span>
+                                    <span class="task-progress-percent">{{ task.progress }}%</span>
+                                </div>
+                                <div class="task-progress-bar">
+                                    <div class="task-progress-fill animated" style="width: {{ task.progress }}%"></div>
+                                </div>
+                                {% if task.progress_message %}
+                                <div class="task-progress-message">{{ task.progress_message }}</div>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <div class="task-progress-loading">
+                                <span class="spinner"></span>
+                                <span>执行中...</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
 
                         {% if task.input_data or task.output_data %}
                         <div class="task-accordion">
@@ -1023,6 +1161,56 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', function() {
+    // 解析并显示触发方式
+    (function() {
+        const triggerTypeElement = document.getElementById('triggerType');
+        if (!triggerTypeElement) return;
+
+        {% if flow_history.flow_metadata %}
+        try {
+            const metadataStr = {{ flow_history.flow_metadata|tojson }};
+            let metadata = metadataStr;
+            if (typeof metadataStr === 'string') {
+                metadata = JSON.parse(metadataStr);
+            }
+
+            if (metadata.trigger_name) {
+                // 触发器触发
+                triggerTypeElement.innerHTML = `
+                    <span class="trigger-badge trigger-scheduled">
+                        <i class="bi bi-clock-history"></i>
+                        ${escapeHtml(metadata.trigger_name)}
+                    </span>
+                `;
+            } else {
+                // 手动触发
+                triggerTypeElement.innerHTML = `
+                    <span class="trigger-badge trigger-manual">
+                        <i class="bi bi-hand-index-thumb"></i>
+                        手动
+                    </span>
+                `;
+            }
+        } catch (e) {
+            console.error('解析触发方式失败:', e);
+            triggerTypeElement.innerHTML = `
+                <span class="trigger-badge trigger-manual">
+                    <i class="bi bi-hand-index-thumb"></i>
+                    手动
+                </span>
+            `;
+        }
+        {% else %}
+        // 没有元数据，默认显示手动
+        triggerTypeElement.innerHTML = `
+            <span class="trigger-badge trigger-manual">
+                <i class="bi bi-hand-index-thumb"></i>
+                手动
+            </span>
+        `;
+        {% endif %}
+    })();
+
     // 渲染输入数据
     {% if flow_history.input_data %}
     try {
@@ -1190,5 +1378,110 @@ document.addEventListener('keydown', function(e) {
         window.location.href = "{{ url_for('flows.flow_history', flow_id=flow_history.flow_id) }}";
     }
 });
+
+// ========================================
+// 任务进度轮询功能（详情页）
+// ========================================
+
+const HISTORY_ID = {{ flow_history.id }};
+const FLOW_STATUS = '{{ flow_history.status }}';
+let detailProgressInterval = null;
+
+/**
+ * 更新任务进度
+ */
+function updateDetailProgress() {
+    fetch(`/api/history/${HISTORY_ID}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data) {
+                const flowHistory = data.data.flow_history;
+                const taskHistories = data.data.task_histories;
+
+                // 更新整个流程的状态
+                if (flowHistory.status !== FLOW_STATUS) {
+                    // 状态发生变化，刷新页面
+                    location.reload();
+                    return;
+                }
+
+                // 更新每个任务的进度
+                taskHistories.forEach(task => {
+                    const progressSection = document.querySelector(`.task-progress-section[data-task-id="${task.id}"]`);
+                    if (progressSection && task.status === 'running') {
+                        if (task.progress !== null && task.progress !== undefined) {
+                            // 有进度信息，显示进度条
+                            progressSection.innerHTML = `
+                                <div class="task-progress-wrapper">
+                                    <div class="task-progress-header">
+                                        <span class="task-progress-label">执行进度</span>
+                                        <span class="task-progress-percent">${task.progress}%</span>
+                                    </div>
+                                    <div class="task-progress-bar">
+                                        <div class="task-progress-fill animated" style="width: ${task.progress}%"></div>
+                                    </div>
+                                    ${task.progress_message ? `<div class="task-progress-message">${task.progress_message}</div>` : ''}
+                                </div>
+                            `;
+                        } else {
+                            // 无进度信息，显示加载中
+                            progressSection.innerHTML = `
+                                <div class="task-progress-loading">
+                                    <span class="spinner"></span>
+                                    <span>执行中...</span>
+                                </div>
+                            `;
+                        }
+                    } else if (progressSection && task.status !== 'running') {
+                        // 任务状态变化，刷新页面
+                        location.reload();
+                    }
+                });
+
+                // 检查是否还有运行中的任务
+                const hasRunningTasks = taskHistories.some(t => t.status === 'running');
+                if (!hasRunningTasks && detailProgressInterval) {
+                    clearInterval(detailProgressInterval);
+                    detailProgressInterval = null;
+                    console.log('所有任务已完成，停止进度轮询');
+                    // 延迟刷新页面以显示最终状态
+                    setTimeout(() => location.reload(), 1000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('更新任务进度失败:', error);
+        });
+}
+
+/**
+ * 启动详情页进度轮询
+ */
+function startDetailProgressPolling() {
+    if (detailProgressInterval) {
+        clearInterval(detailProgressInterval);
+    }
+
+    detailProgressInterval = setInterval(updateDetailProgress, 2000);  // 2秒轮询一次
+    console.log('启动详情页进度轮询');
+}
+
+// 如果流程正在运行，启动轮询
+{% if flow_history.status == 'running' %}
+document.addEventListener('DOMContentLoaded', function() {
+    // 延迟启动轮询，等待页面完全加载
+    setTimeout(() => {
+        startDetailProgressPolling();
+        showToast('任务正在运行中，进度将自动更新', 'info');
+    }, 500);
+});
+
+// 页面卸载时清除轮询
+window.addEventListener('beforeunload', () => {
+    if (detailProgressInterval) {
+        clearInterval(detailProgressInterval);
+    }
+});
+{% endif %}
 </script>
 {% endblock %}

@@ -394,7 +394,7 @@
                         <label for="triggerParams" class="form-label">
                             <i class="bi bi-braces"></i> 触发参数 (JSON格式)
                         </label>
-                        <textarea class="form-control font-monospace" id="triggerParams" rows="6" 
+                        <textarea class="form-control font-monospace" id="triggerParams" rows="6"
                                   placeholder='{
     "param1": "value1",
     "param2": "value2"
@@ -403,6 +403,19 @@
                             执行工作流时传入的参数，JSON格式。留空表示不传递参数。
                         </div>
                         <div class="invalid-feedback">请输入有效的JSON格式</div>
+                    </div>
+
+                    <!-- 最大实例数 -->
+                    <div class="mb-3">
+                        <label for="triggerMaxInstances" class="form-label">
+                            <i class="bi bi-layers"></i> 最大并发实例数
+                        </label>
+                        <input type="number" class="form-control" id="triggerMaxInstances"
+                               min="1" value="1" placeholder="默认为 1">
+                        <div class="form-text">
+                            同一时间最多允许的并发执行实例数。设置为 1 表示不允许并发执行。
+                        </div>
+                        <div class="invalid-feedback">请输入大于等于 1 的整数</div>
                     </div>
                 </form>
             </div>
@@ -498,7 +511,7 @@ function loadTriggersForFlow(flowId) {
 // 渲染触发器列表
 function renderTriggersList(triggers) {
     const content = document.getElementById('triggersListContent');
-    
+
     const html = `
         <div class="table-responsive">
             <table class="table table-hover">
@@ -506,6 +519,7 @@ function renderTriggersList(triggers) {
                     <tr>
                         <th>名称</th>
                         <th>Cron表达式</th>
+                        <th>最大并发</th>
                         <th>状态</th>
                         <th>创建时间</th>
                         <th>操作</th>
@@ -521,8 +535,9 @@ function renderTriggersList(triggers) {
                                 </div>
                             </td>
                             <td><code>${escapeHtml(trigger.cron_expression)}</code></td>
+                            <td>${trigger.max_instances || 1} 个实例</td>
                             <td>
-                                ${trigger.enabled ? 
+                                ${trigger.enabled ?
                                     '<span class="badge bg-success"><i class="bi bi-check-circle"></i> 已启用</span>' :
                                     '<span class="badge bg-secondary"><i class="bi bi-pause-circle"></i> 已禁用</span>'
                                 }
@@ -533,8 +548,8 @@ function renderTriggersList(triggers) {
                                     <button class="btn btn-outline-primary" onclick="editTriggerFromList(${trigger.id})" title="编辑">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <button class="btn btn-outline-${trigger.enabled ? 'warning' : 'success'}" 
-                                            onclick="toggleTriggerFromList(${trigger.id}, ${!trigger.enabled})" 
+                                    <button class="btn btn-outline-${trigger.enabled ? 'warning' : 'success'}"
+                                            onclick="toggleTriggerFromList(${trigger.id}, ${!trigger.enabled})"
                                             title="${trigger.enabled ? '禁用' : '启用'}">
                                         <i class="bi bi-${trigger.enabled ? 'pause-circle' : 'play-circle'}"></i>
                                     </button>
@@ -549,7 +564,7 @@ function renderTriggersList(triggers) {
             </table>
         </div>
     `;
-    
+
     content.innerHTML = html;
 }
 
@@ -557,17 +572,18 @@ function renderTriggersList(triggers) {
 function createTrigger(flowId) {
     // 保存flow ID
     window.currentFlowId = flowId;
-    
+
     // 重置表单
     document.getElementById('createTriggerForm').reset();
     document.getElementById('triggerFlowId').value = flowId;
     document.getElementById('editTriggerId').value = '';
     document.getElementById('triggerModalTitleText').textContent = '创建触发器';
-    
+    document.getElementById('triggerMaxInstances').value = '1';  // 默认值为 1
+
     // 移除验证状态
     document.getElementById('createTriggerForm').classList.remove('was-validated');
     document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-    
+
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('createTriggerModal'));
     modal.show();
@@ -594,18 +610,19 @@ function editTriggerFromList(triggerId) {
         .then(data => {
             if (data.success && data.data) {
                 const trigger = data.data;
-                
+
                 // 填充表单
                 document.getElementById('triggerFlowId').value = trigger.flow_id;
                 document.getElementById('editTriggerId').value = trigger.id;
                 document.getElementById('triggerName').value = trigger.name;
                 document.getElementById('triggerDescription').value = trigger.description || '';
                 document.getElementById('triggerCron').value = trigger.cron_expression;
-                
+                document.getElementById('triggerMaxInstances').value = trigger.max_instances || 1;
+
                 // 格式化JSON参数
                 if (trigger.trigger_params) {
                     try {
-                        const params = typeof trigger.trigger_params === 'string' ? 
+                        const params = typeof trigger.trigger_params === 'string' ?
                             JSON.parse(trigger.trigger_params) : trigger.trigger_params;
                         document.getElementById('triggerParams').value = JSON.stringify(params, null, 2);
                     } catch (e) {
@@ -614,16 +631,16 @@ function editTriggerFromList(triggerId) {
                 } else {
                     document.getElementById('triggerParams').value = '';
                 }
-                
+
                 // 更新标题
                 document.getElementById('triggerModalTitleText').textContent = '编辑触发器';
-                
+
                 // 关闭列表模态框
                 const listModal = bootstrap.Modal.getInstance(document.getElementById('triggersListModal'));
                 if (listModal) {
                     listModal.hide();
                 }
-                
+
                 // 显示编辑模态框
                 setTimeout(() => {
                     const modal = new bootstrap.Modal(document.getElementById('createTriggerModal'));
@@ -648,20 +665,27 @@ function saveTriggerFromList() {
     const description = document.getElementById('triggerDescription').value.trim();
     const cronExpression = document.getElementById('triggerCron').value.trim();
     const paramsText = document.getElementById('triggerParams').value.trim();
-    
+    const maxInstances = parseInt(document.getElementById('triggerMaxInstances').value) || 1;
+
     // 客户端验证
     if (!name) {
         document.getElementById('triggerName').classList.add('is-invalid');
         showNotification('请输入触发器名称', 'error');
         return;
     }
-    
+
     if (!cronExpression) {
         document.getElementById('triggerCron').classList.add('is-invalid');
         showNotification('请输入Cron表达式', 'error');
         return;
     }
-    
+
+    if (maxInstances < 1) {
+        document.getElementById('triggerMaxInstances').classList.add('is-invalid');
+        showNotification('最大实例数必须大于等于 1', 'error');
+        return;
+    }
+
     // 验证JSON格式
     let triggerParams = {};
     if (paramsText) {
@@ -673,29 +697,30 @@ function saveTriggerFromList() {
             return;
         }
     }
-    
+
     // 移除验证错误状态
     document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-    
+
     // 禁用保存按钮
     const saveBtn = document.getElementById('saveTriggerBtn');
     const originalContent = saveBtn.innerHTML;
     saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> 保存中...';
     saveBtn.disabled = true;
-    
+
     // 构建请求数据
     const requestData = {
         flow_id: flowId,
         name: name,
         description: description,
         cron_expression: cronExpression,
-        trigger_params: triggerParams
+        trigger_params: triggerParams,
+        max_instances: maxInstances
     };
-    
+
     // 判断是创建还是更新
     const url = triggerId ? `/api/triggers/${triggerId}` : '/api/triggers';
     const method = triggerId ? 'PUT' : 'POST';
-    
+
     fetch(url, {
         method: method,
         headers: {
@@ -707,13 +732,13 @@ function saveTriggerFromList() {
     .then(data => {
         if (data.success) {
             showNotification(triggerId ? '触发器更新成功！' : '触发器创建成功！', 'success');
-            
+
             // 关闭创建模态框
             const createModal = bootstrap.Modal.getInstance(document.getElementById('createTriggerModal'));
             if (createModal) {
                 createModal.hide();
             }
-            
+
             // 重新打开列表模态框并刷新
             setTimeout(() => {
                 const listModal = new bootstrap.Modal(document.getElementById('triggersListModal'));
@@ -932,6 +957,7 @@ function showNotification(message, type) {
 // 自动刷新控制
 let refreshInterval = null;
 let isAutoRefreshEnabled = false;
+const AUTO_REFRESH_STORAGE_KEY = 'flowy_flows_auto_refresh';
 
 function toggleAutoRefresh() {
     const toggle = document.getElementById('autoRefreshToggle');
@@ -950,6 +976,7 @@ function startAutoRefresh() {
     }
 
     isAutoRefreshEnabled = true;
+    localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, 'true');
     updateAutoRefreshStatus();
 
     refreshInterval = setInterval(() => {
@@ -976,6 +1003,7 @@ function stopAutoRefresh() {
         refreshInterval = null;
     }
     isAutoRefreshEnabled = false;
+    localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, 'false');
     updateAutoRefreshStatus();
 }
 
@@ -1022,7 +1050,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const autoRefreshToggle = document.getElementById('autoRefreshToggle');
     if (autoRefreshToggle) {
         autoRefreshToggle.addEventListener('change', toggleAutoRefresh);
-        updateAutoRefreshStatus();
+
+        // 从 localStorage 读取自动刷新状态
+        const savedRefreshState = localStorage.getItem(AUTO_REFRESH_STORAGE_KEY);
+        if (savedRefreshState === 'true') {
+            autoRefreshToggle.checked = true;
+            startAutoRefresh();
+        } else {
+            updateAutoRefreshStatus();
+        }
     }
 
     // 初始化触发按钮

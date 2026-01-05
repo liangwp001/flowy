@@ -104,7 +104,8 @@ def api_get_flow_history(flow_id):
             'end_time': h.end_time.isoformat() if h.end_time else None,
             'input_data': h.input_data,
             'output_data': h.output_data,
-            'flow_metadata': h.flow_metadata
+            'flow_metadata': h.flow_metadata,
+            'running_tasks': getattr(h, 'running_tasks', [])
         } for h in histories]
 
         return jsonify({
@@ -143,7 +144,10 @@ def api_get_history_detail(history_id):
             'start_time': t.start_time.isoformat() if t.start_time else None,
             'end_time': t.end_time.isoformat() if t.end_time else None,
             'input_data': t.input_data,
-            'output_data': t.output_data
+            'output_data': t.output_data,
+            'progress': t.progress,
+            'progress_message': t.progress_message,
+            'progress_updated_at': t.progress_updated_at.isoformat() if t.progress_updated_at else None
         } for t in task_histories]
 
         return jsonify({
@@ -209,6 +213,51 @@ def api_get_job_status(job_id):
         return jsonify({
             'success': True,
             'data': job_status
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/history/<int:history_id>', methods=['DELETE'])
+def api_delete_history(history_id):
+    """删除单条执行历史API"""
+    try:
+        result = FlowService.delete_flow_history(history_id)
+        if result:
+            return jsonify({
+                'success': True,
+                'message': f'执行历史 #{history_id} 已删除'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'History not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/history/batch-delete', methods=['POST'])
+def api_batch_delete_history():
+    """批量删除执行历史API"""
+    try:
+        data = request.get_json() or {}
+        history_ids = data.get('history_ids', [])
+
+        if not history_ids:
+            return jsonify({'success': False, 'error': 'No history IDs provided'}), 400
+
+        if not isinstance(history_ids, list):
+            return jsonify({'success': False, 'error': 'history_ids must be a list'}), 400
+
+        success_count, failed_count = FlowService.batch_delete_flow_history(history_ids)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'success_count': success_count,
+                'failed_count': failed_count,
+                'total_count': len(history_ids)
+            },
+            'message': f'成功删除 {success_count} 条记录' +
+                      (f'，失败 {failed_count} 条' if failed_count > 0 else '')
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

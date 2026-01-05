@@ -8,11 +8,31 @@ from datetime import datetime
 from flowy.core.json_utils import json
 from sqlalchemy import func, desc, asc, and_
 
-from flowy.core.db import Flow, FlowHistory, TaskHistory, get_session
+from flowy.core.db import Flow, FlowHistory, TaskHistory, get_session, get_running_tasks
 
 
 class FlowService:
     """Flow服务类"""
+
+    @staticmethod
+    def get_all_flows_with_stats() -> List[Dict]:
+        """获取所有Flow及其统计信息（用于侧边栏）"""
+        session = get_session()
+        try:
+            flows = session.query(Flow).order_by(Flow.name).all()
+
+            flows_with_stats = []
+            for flow in flows:
+                session.expunge(flow)
+                stats = FlowService.get_flow_statistics(flow.id)
+                flows_with_stats.append({
+                    'flow': flow,
+                    'stats': stats
+                })
+
+            return flows_with_stats
+        finally:
+            session.close()
 
     @staticmethod
     def get_flows_paginated(page: int = 1, per_page: int = 20, search: str = None) -> Tuple[List[Flow], int]:
@@ -146,8 +166,11 @@ class FlowService:
             total = query.count()
             histories = query.offset((page - 1) * per_page).limit(per_page).all()
 
-            # 解析JSON数据
+            # 解析JSON数据并为运行中的历史记录获取正在运行的任务
             for history in histories:
+                # 先从会话中分离对象，避免 autoflush 问题
+                session.expunge(history)
+
                 try:
                     history.input_data = json.safe_loads(history.input_data or '{}')
                 except (ValueError, TypeError):
@@ -163,6 +186,32 @@ class FlowService:
                         history.output_data = parsed_output
                 except (ValueError, TypeError):
                     history.output_data = {}
+
+                # 解析触发器信息
+                history.trigger_name = None
+                history.trigger_type = None
+                try:
+                    metadata = json.safe_loads(history.flow_metadata or '{}')
+                    history.trigger_name = metadata.get('trigger_name')
+                    history.trigger_type = metadata.get('trigger_type')
+                except (ValueError, TypeError):
+                    pass
+
+                # 对于运行中的历史记录，获取正在运行的任务及其进度
+                if history.status == 'running':
+                    running_tasks = get_running_tasks(session, history.id)
+                    history.running_tasks = [
+                        {
+                            'id': t.id,
+                            'name': t.name,
+                            'progress': t.progress,
+                            'progress_message': t.progress_message,
+                            'progress_updated_at': t.progress_updated_at.isoformat() if t.progress_updated_at else None
+                        }
+                        for t in running_tasks
+                    ]
+                else:
+                    history.running_tasks = []
 
             return histories, (total + per_page - 1) // per_page
         finally:
@@ -225,6 +274,131 @@ class FlowService:
             session.close()
 
 
+
+    @staticmethod
+    def delete_flow_history(history_id: int) -> bool:
+        """删除单条执行历史"""
+        session = get_session()
+        try:
+            history = session.query(FlowHistory).filter(
+                FlowHistory.id == history_id
+            ).first()
+
+            if not history:
+                return False
+
+            # 删除关联的任务历史
+            session.query(TaskHistory).filter(
+                TaskHistory.flow_history_id == history_id
+            ).delete()
+
+            # 删除执行历史
+            session.delete(history)
+            session.commit()
+            return True
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    @staticmethod
+    def batch_delete_flow_history(history_ids: List[int]) -> Tuple[int, int]:
+        """批量删除执行历史
+        返回 (成功数量, 失败数量)
+        """
+        session = get_session()
+        success_count = 0
+        failed_count = 0
+        try:
+            for history_id in history_ids:
+                try:
+                    history = session.query(FlowHistory).filter(
+                        FlowHistory.id == history_id
+                    ).first()
+
+                    if history:
+                        # 删除关联的任务历史
+                        session.query(TaskHistory).filter(
+                            TaskHistory.flow_history_id == history_id
+                        ).delete()
+                        # 删除执行历史
+                        session.delete(history)
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                except Exception:
+                    failed_count += 1
+
+            session.commit()
+            return success_count, failed_count
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_task_histories(history_id: int) -> List[TaskHistory]:
+        """获取执行历史的任务列表"""
+        session = get_session()
+        try:
+            task_histories = session.query(TaskHistory).filter(
+                TaskHistory.flow_history_id == history_id
+            ).order_by(asc(TaskHistory.created_at)).all()
+
+            # 分离对象以避免会话问题
+            for task in task_histories:
+                session.expunge(task)
+
+            return task_histories
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_task_data(task_id: int) -> Optional[Dict]:
+        """获取任务的输入输出数据"""
+        from flowy.core.json_utils import json
+
+        session = get_session()
+        try:
+            task = session.query(TaskHistory).filter(
+                TaskHistory.id == task_id
+            ).first()
+
+            if not task:
+                return None
+
+            session.expunge(task)
+
+            # 解析 JSON 数据
+            input_data = None
+            output_data = None
+
+            if task.input_data:
+                try:
+                    input_data = json.safe_loads(task.input_data)
+                except (ValueError, TypeError):
+                    input_data = task.input_data
+
+            if task.output_data:
+                try:
+                    output_data = json.safe_loads(task.output_data)
+                except (ValueError, TypeError):
+                    output_data = task.output_data
+
+            return {
+                'id': task.id,
+                'name': task.name,
+                'status': task.status,
+                'input_data': input_data,
+                'output_data': output_data,
+                'created_at': task.created_at.isoformat() if task.created_at else None,
+                'start_time': task.start_time.isoformat() if task.start_time else None,
+                'end_time': task.end_time.isoformat() if task.end_time else None
+            }
+        finally:
+            session.close()
 
     @staticmethod
     def get_flow_chart_data(flow_id: str, days: int = 30) -> Dict:

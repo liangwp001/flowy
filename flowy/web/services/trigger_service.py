@@ -24,20 +24,22 @@ class TriggerService:
         name: str,
         description: str,
         cron_expression: str,
-        trigger_params: dict
+        trigger_params: dict,
+        max_instances: int = 1
     ) -> Trigger:
         """创建触发器
-        
+
         Args:
             flow_id: 工作流ID
             name: 触发器名称
             description: 触发器描述
             cron_expression: Cron表达式
             trigger_params: 触发参数字典
-            
+            max_instances: 最大并发实例数，默认1
+
         Returns:
             创建的触发器对象
-            
+
         Raises:
             ValueError: 当工作流不存在或Cron表达式无效时
         """
@@ -47,13 +49,17 @@ class TriggerService:
             flow = session.query(Flow).filter(Flow.id == flow_id).first()
             if not flow:
                 raise ValueError(f"工作流 {flow_id} 不存在")
-            
+
             # 验证 Cron 表达式
             try:
                 CronTrigger.from_crontab(cron_expression)
             except Exception as e:
                 raise ValueError(f"无效的 Cron 表达式: {e}")
-            
+
+            # 验证 max_instances
+            if max_instances < 1:
+                raise ValueError("max_instances 必须大于等于 1")
+
             # 创建触发器
             trigger = Trigger(
                 flow_id=flow_id,
@@ -61,23 +67,25 @@ class TriggerService:
                 description=description,
                 cron_expression=cron_expression,
                 trigger_params=json.dumps(trigger_params, ensure_ascii=False),
+                max_instances=max_instances,
                 enabled=1,
                 created_at=datetime.now(),
                 updated_at=datetime.now()
             )
-            
+
             session.add(trigger)
             session.commit()
             session.refresh(trigger)
-            
+
             # 添加到调度器
             SchedulerService.add_job(
                 trigger.id,
                 trigger.flow_id,
-                trigger.cron_expression
+                trigger.cron_expression,
+                max_instances=max_instances
             )
-            
-            logger.info(f"创建触发器成功: {trigger.id} - {trigger.name}")
+
+            logger.info(f"创建触发器成功: {trigger.id} - {trigger.name}, max_instances: {max_instances}")
             return trigger
         finally:
             session.close()
@@ -125,20 +133,22 @@ class TriggerService:
         name: str = None,
         description: str = None,
         cron_expression: str = None,
-        trigger_params: dict = None
+        trigger_params: dict = None,
+        max_instances: int = None
     ) -> Trigger:
         """更新触发器
-        
+
         Args:
             trigger_id: 触发器ID
             name: 新的触发器名称（可选）
             description: 新的触发器描述（可选）
             cron_expression: 新的Cron表达式（可选）
             trigger_params: 新的触发参数（可选）
-            
+            max_instances: 新的最大实例数（可选）
+
         Returns:
             更新后的触发器对象
-            
+
         Raises:
             ValueError: 当触发器不存在或Cron表达式无效时
         """
@@ -147,10 +157,10 @@ class TriggerService:
             trigger = session.query(Trigger).filter(
                 Trigger.id == trigger_id
             ).first()
-            
+
             if not trigger:
                 raise ValueError(f"触发器 {trigger_id} 不存在")
-            
+
             # 验证新的 Cron 表达式
             if cron_expression:
                 try:
@@ -158,27 +168,32 @@ class TriggerService:
                 except Exception as e:
                     raise ValueError(f"无效的 Cron 表达式: {e}")
                 trigger.cron_expression = cron_expression
-            
+
             if name:
                 trigger.name = name
             if description is not None:
                 trigger.description = description
             if trigger_params is not None:
                 trigger.trigger_params = json.dumps(trigger_params, ensure_ascii=False)
-            
+            if max_instances is not None:
+                if max_instances < 1:
+                    raise ValueError("max_instances 必须大于等于 1")
+                trigger.max_instances = max_instances
+
             trigger.updated_at = datetime.now()
             session.commit()
             session.refresh(trigger)
-            
+
             # 重新加载调度任务
             if trigger.enabled:
                 SchedulerService.add_job(
                     trigger.id,
                     trigger.flow_id,
-                    trigger.cron_expression
+                    trigger.cron_expression,
+                    max_instances=trigger.max_instances
                 )
-            
-            logger.info(f"更新触发器成功: {trigger.id} - {trigger.name}")
+
+            logger.info(f"更新触发器成功: {trigger.id} - {trigger.name}, max_instances: {trigger.max_instances}")
             return trigger
         finally:
             session.close()

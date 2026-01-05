@@ -505,59 +505,91 @@ def process_sensitive_data(encrypted_config: str) -> dict:
 
 ## ⚙️ 配置
 
+### 支持的配置项
+
+Flowy 支持以下配置项，可通过 `configure()` 函数设置：
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `data_dir` | str | `./data` | 数据存储目录，包含数据库和日志文件 |
+| `enable_history_cleanup` | bool | `False` | 是否启用历史数据自动清理 |
+| `history_retention_days` | int | `60` | 历史数据保留天数 |
+| `scheduler_max_workers` | int | `10` | 调度器线程池最大工作线程数 |
+| `scheduler_timezone` | str | `Asia/Shanghai` | 调度器时区 |
+
 ### 基本配置
+
 ```python
 from flowy import configure
 
-# 自定义数据目录
+# 方式1：自定义数据目录
 configure(data_dir='/path/to/your/data')
+
+# 方式2：同时配置数据目录和历史清理
+config = configure(data_dir='/path/to/data')
+config.enable_history_cleanup = True
+config.history_retention_days = 30  # 保留30天
 ```
 
-### 环境变量
+### 调度器配置
+
+调度器使用 `APScheduler` 的 `BackgroundScheduler`，可通过以下方式配置：
+
+```python
+from flowy import configure
+
+# 配置调度器参数
+config = configure(data_dir='/path/to/data')
+config.scheduler_max_workers = 20  # 设置线程池大小
+config.scheduler_timezone = 'Asia/Shanghai'  # 设置时区
+```
+
+**配置说明：**
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `scheduler_max_workers` | int | `10` | 线程池最大工作线程数，增加可提高并发能力 |
+| `scheduler_timezone` | str | `Asia/Shanghai` | 调度器时区，影响定时任务的执行时间 |
+| `coalesce` | bool | `True` | 是否合并错过的执行（需修改代码） |
+| `max_instances` | int | `1` | 同一任务最多并发实例数（需修改代码） |
+
+### 环境变量配置
+
+目前支持通过环境变量配置数据目录：
+
 ```bash
-# 数据目录
+# 设置数据目录（Linux/Mac）
 export FLOWY_DATA_DIR=/path/to/data
 
-# 日志级别
-export FLOWY_LOG_LEVEL=INFO
+# 设置数据目录（Windows）
+set FLOWY_DATA_DIR=C:\path\to\data
 
-# Web界面端口
-export FLOWY_WEB_PORT=5000
+# 然后在代码中使用
+from flowy import configure
+import os
 
-# 数据库连接（可选，默认使用SQLite）
-export FLOWY_DATABASE_URL=postgresql://user:pass@localhost/flowy
-
-# 加密密钥（用于敏感数据）
-export FLOWY_ENCRYPTION_KEY=your-secret-key
+configure(data_dir=os.environ.get('FLOWY_DATA_DIR'))
 ```
 
-### 配置文件
-创建 `flowy.yaml` 配置文件：
+### Web 界面配置
 
-```yaml
-# Flowy 配置文件
-database:
-  url: "sqlite:///data/flowy.db"
-  echo: false
+Web 界面的配置通过 `run()` 函数参数设置：
 
-logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+```python
+from flowy import run
 
-web:
-  host: "127.0.0.1"
-  port: 5000
-  debug: false
+# 基本启动
+run(host='127.0.0.1', port=5000, debug=True)
 
-scheduler:
-  max_workers: 10
-  coalesce: true
-  misfire_grace_time: 300
-
-security:
-  secret_key: "your-secret-key-here"
-  session_timeout: 3600
+# 生产环境配置
+run(host='0.0.0.0', port=8080, debug=False)
 ```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `host` | `127.0.0.1` | 监听地址，`0.0.0.0` 表示监听所有网卡 |
+| `port` | `5000` | 监听端口 |
+| `debug` | `False` | 调试模式，生产环境建议关闭 |
 
 ## 🚀 性能优化
 
