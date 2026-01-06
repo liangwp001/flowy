@@ -105,7 +105,9 @@ def api_get_flow_history(flow_id):
             'input_data': h.input_data,
             'output_data': h.output_data,
             'flow_metadata': h.flow_metadata,
-            'running_tasks': getattr(h, 'running_tasks', [])
+            'running_tasks': getattr(h, 'running_tasks', []),
+            'remarks': getattr(h, 'remarks', []),
+            'remark_level': getattr(h, 'remark_level', None)
         } for h in histories]
 
         return jsonify({

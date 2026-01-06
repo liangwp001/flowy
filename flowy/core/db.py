@@ -387,3 +387,89 @@ def get_current_db_version() -> str | None:
     from flowy.core.migration_manager import get_migration_manager
     manager = get_migration_manager()
     return manager.get_current_version()
+
+
+# ============================================
+# 备注相关功能
+# ============================================
+
+def add_flow_remark(
+        session: Session,
+        history_id: int,
+        level: str,
+        message: str
+) -> bool:
+    """为Flow执行历史添加备注
+
+    Args:
+        session: 数据库会话
+        history_id: 执行历史ID
+        level: 备注级别 (info/warning/error)
+        message: 备注消息
+
+    Returns:
+        是否添加成功
+    """
+    from flowy.core.json_utils import json
+
+    if level not in ('info', 'warning', 'error'):
+        raise ValueError(f"无效的备注级别: {level}，必须是 info、warning 或 error")
+
+    flow_history = session.query(FlowHistory).filter(
+        FlowHistory.id == history_id
+    ).first()
+
+    if not flow_history:
+        return False
+
+    # 解析现有的 metadata
+    try:
+        metadata = json.safe_loads(flow_history.flow_metadata or '{}')
+    except (ValueError, TypeError):
+        metadata = {}
+
+    # 获取或创建备注列表
+    remarks = metadata.get('remarks', [])
+
+    # 添加新备注
+    remark = {
+        'level': level,
+        'message': message,
+        'timestamp': datetime.now().isoformat()
+    }
+    remarks.append(remark)
+
+    # 更新 metadata
+    metadata['remarks'] = remarks
+    flow_history.flow_metadata = json.dumps(metadata)
+
+    # 提交更改到数据库
+    session.commit()
+
+    return True
+
+
+def get_flow_remarks(session: Session, history_id: int) -> list:
+    """获取Flow执行历史的备注列表
+
+    Args:
+        session: 数据库会话
+        history_id: 执行历史ID
+
+    Returns:
+        备注列表，每个元素包含 level, message, timestamp
+    """
+    from flowy.core.json_utils import json
+
+    flow_history = session.query(FlowHistory).filter(
+        FlowHistory.id == history_id
+    ).first()
+
+    if not flow_history:
+        return []
+
+    try:
+        metadata = json.safe_loads(flow_history.flow_metadata or '{}')
+        return metadata.get('remarks', [])
+    except (ValueError, TypeError):
+        return []

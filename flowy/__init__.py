@@ -25,6 +25,7 @@ from flowy.core.context import get_flow_history_id
 from flowy.core.config import configure, get_config
 from flowy.core.progress import set_progress
 from flowy.core.db import run_pending_migrations, get_migration_history, get_current_db_version
+from flowy.core import remark
 
 __version__ = "0.1.0"
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "run_pending_migrations",
     "get_migration_history",
     "get_current_db_version",
+    "remark",
 ]
 
 

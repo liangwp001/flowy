@@ -773,6 +773,131 @@
 .time-value {
     color: #4b5563;
 }
+
+/* ============================================
+   备注列样式
+=========================================== */
+.remark-cell {
+    text-align: center;
+}
+
+.remark-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.remark-badge:hover {
+    transform: scale(1.1);
+}
+
+.remark-badge .remark-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.remark-badge.info {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.remark-badge.info .remark-count {
+    background: #10b981;
+}
+
+.remark-badge.warning {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.remark-badge.warning .remark-count {
+    background: #f59e0b;
+}
+
+.remark-badge.error {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.remark-badge.error .remark-count {
+    background: #ef4444;
+}
+
+.remark-empty {
+    color: #d1d5db;
+    font-size: 1.125rem;
+}
+
+/* 备注模态框样式 */
+.remark-modal-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.remark-modal-item:last-child {
+    border-bottom: none;
+}
+
+.remark-level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.remark-level-badge.info {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.remark-level-badge.warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.remark-level-badge.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.remark-content {
+    flex: 1;
+    margin-left: 0.75rem;
+}
+
+.remark-message {
+    font-size: 0.875rem;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+}
+
+.remark-time {
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
 </style>
 {% endblock %}
 
@@ -979,6 +1104,7 @@
                             <th width="160">时间信息</th>
                             <th width="80">触发方式</th>
                             <th width="100">执行时长</th>
+                            <th width="60">备注</th>
                             <th width="70">输入</th>
                             <th width="70">输出</th>
                             <th width="150">操作</th>
@@ -1087,6 +1213,19 @@
                                     <span class="duration-text">{{ history.start_time|duration(history.end_time) }}</span>
                                 </span>
                             </td>
+                            <td onclick="event.stopPropagation()" class="remark-cell">
+                                {% if history.remarks %}
+                                    <div class="remark-badge {{ history.remark_level }}"
+                                             onclick="viewRemarks({{ history.id }})"
+                                             data-history-id="{{ history.id }}"
+                                             data-remarks='{{ history.remarks|tojson|e }}'>
+                                        <i class="bi bi-chat-dots"></i>
+                                        <span class="remark-count">{{ history.remarks|length }}</span>
+                                    </div>
+                                {% else %}
+                                    <span class="remark-empty"><i class="bi bi-chat-dots"></i></span>
+                                {% endif %}
+                            </td>
                             <td onclick="event.stopPropagation()">
                                 {% if history.input_data %}
                                     <button type="button" class="data-preview-btn view-data-btn"
@@ -1134,7 +1273,7 @@
                             </td>
                         </tr>
                         <tr class="task-detail-row" data-detail-for="{{ history.id }}">
-                            <td colspan="11" class="task-detail-cell">
+                            <td colspan="12" class="task-detail-cell">
                                 <div class="task-list-container" id="taskList-{{ history.id }}">
                                     <div class="task-list-loading">
                                         <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
@@ -1332,6 +1471,29 @@
         </div>
     </div>
 </div>
+
+<!-- 备注查看模态框 -->
+<div class="modal fade" id="remarkModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-chat-dots"></i>
+                    执行备注 #<span id="remark-history-id"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="remark-content-container">
+                    <!-- 备注列表将在这里渲染 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1467,6 +1629,128 @@ function fallbackCopyLog() {
         console.error('复制失败:', err);
         showNotification('复制失败，请手动复制', 'error');
     }
+}
+
+// ========================================
+// 备注查看功能
+// ========================================
+
+/**
+ * 查看执行历史备注
+ */
+function viewRemarks(historyId) {
+    document.getElementById('remark-history-id').textContent = historyId;
+
+    const container = document.getElementById('remark-content-container');
+
+    // 尝试从DOM中获取备注数据（已由后端渲染）
+    const badge = document.querySelector(`.remark-badge[data-history-id="${historyId}"]`);
+    if (badge && badge.dataset.remarks) {
+        try {
+            const remarks = JSON.parse(badge.dataset.remarks);
+            renderRemarks(remarks);
+        } catch (e) {
+            console.error('解析备注数据失败:', e);
+            container.innerHTML = '<div class="alert alert-danger">解析备注数据失败</div>';
+        }
+    } else {
+        // 如果DOM中没有，从API获取
+        container.innerHTML = `
+            <div class="text-center" style="padding: 2rem;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载备注...</p>
+            </div>
+        `;
+
+        fetch(`/api/history/${historyId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data.flow_history) {
+                    // 从 metadata 中解析备注
+                    const metadata = JSON.parse(data.data.flow_history.flow_metadata || '{}');
+                    const remarks = metadata.remarks || [];
+                    renderRemarks(remarks);
+                } else {
+                    container.innerHTML = '<div class="alert alert-warning">暂无备注</div>';
+                }
+            })
+            .catch(error => {
+                console.error('加载备注失败:', error);
+                container.innerHTML = '<div class="alert alert-danger">加载备注失败</div>';
+            });
+    }
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('remarkModal'));
+    modal.show();
+}
+
+/**
+ * 渲染备注列表
+ */
+function renderRemarks(remarks) {
+    const container = document.getElementById('remark-content-container');
+
+    if (!remarks || remarks.length === 0) {
+        container.innerHTML = `
+            <div class="text-center" style="padding: 2rem; color: #9ca3af;">
+                <i class="bi bi-chat-dots" style="font-size: 2rem;"></i>
+                <p class="mt-2">暂无备注</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="remark-list">';
+
+    remarks.forEach(remark => {
+        const levelText = {
+            'info': '信息',
+            'warning': '警告',
+            'error': '错误'
+        }[remark.level] || remark.level;
+
+        const iconClass = {
+            'info': 'info-circle',
+            'warning': 'exclamation-triangle',
+            'error': 'x-circle'
+        }[remark.level] || 'info-circle';
+
+        html += `
+            <div class="remark-modal-item">
+                <span class="remark-level-badge ${remark.level}">
+                    <i class="bi bi-${iconClass}"></i>
+                    ${levelText}
+                </span>
+                <div class="remark-content">
+                    <div class="remark-message">${escapeHtml(remark.message)}</div>
+                    <div class="remark-time">${formatRemarkTime(remark.timestamp)}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+/**
+ * 格式化备注时间
+ */
+function formatRemarkTime(isoString) {
+    if (!isoString) return '';
+
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 // HTML转义函数

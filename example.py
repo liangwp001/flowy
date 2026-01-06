@@ -3,7 +3,7 @@ Flowy 多步骤工作流示例
 演示如何使用框架构建一个完整的数据处理工作流
 """
 
-from flowy import flow, task, run, get_flow_logger, set_progress
+from flowy import flow, task, run, get_flow_logger, set_progress, remark
 import time
 
 
@@ -34,26 +34,34 @@ def transform_data(data: dict) -> dict:
     logger = get_flow_logger()
     logger.info(f"开始转换数据")
 
+    # 添加 info 级别备注
+    remark.add_info("开始数据转换流程")
+
     # 更新进度：开始转换
     set_progress(10, "准备转换数据...")
 
     # 模拟数据处理步骤
-    time.sleep(0.5)
+    time.sleep(5)
     set_progress(30, "转换名称字段...")
 
-    time.sleep(0.3)
+    time.sleep(3)
     name = data['name'].upper()
     set_progress(50, "计算出生年份...")
 
-    time.sleep(0.3)
+    time.sleep(3)
     birth_year = 2025 - data['age']
+
+    # 添加 warning 级别备注（示例：当年龄较大时）
+    if data['age'] > 80:
+        remark.add_warning(f"处理高龄人员数据: {data['age']}岁")
+
     set_progress(70, "判断是否成年...")
 
-    time.sleep(0.2)
+    time.sleep(2)
     is_adult = data['age'] >= 18
     set_progress(90, "整合转换结果...")
 
-    time.sleep(0.1)
+    time.sleep(1)
     transformed = {
         'name': name,
         'age': data['age'],
@@ -62,6 +70,7 @@ def transform_data(data: dict) -> dict:
     }
 
     set_progress(100, "数据转换完成")
+    remark.add_info(f"数据转换成功: 姓名={name}, 出生年份={birth_year}")
     logger.info(f"数据转换完成: {transformed}")
     return transformed
 
@@ -74,15 +83,15 @@ def enrich_data(data: dict) -> dict:
 
     # 更新进度
     set_progress(20, "计算代际信息...")
-    time.sleep(0.3)
+    time.sleep(3)
     generation = get_generation(data['birth_year'])
 
     set_progress(50, "判断年龄段...")
-    time.sleep(0.3)
+    time.sleep(3)
     age_group = get_age_group(data['age'])
 
     set_progress(80, "添加处理时间戳...")
-    time.sleep(0.2)
+    time.sleep(2)
     processed_at = time.strftime('%Y-%m-%d %H:%M:%S')
 
     set_progress(100, "数据丰富完成")
@@ -216,6 +225,7 @@ def data_processing_flow(name: str, age: int) -> dict:
     """
     logger = get_flow_logger()
     logger.info(f"工作流开始执行，输入参数: name={name}, age={age}")
+    remark.add_info(f"工作流开始执行，输入参数: name={name}, age={age}")
 
     # 步骤1: 验证输入数据
     input_data = {'name': name, 'age': age}

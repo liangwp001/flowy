@@ -8,7 +8,7 @@ from datetime import datetime
 from flowy.core.json_utils import json
 from sqlalchemy import func, desc, asc, and_
 
-from flowy.core.db import Flow, FlowHistory, TaskHistory, get_session, get_running_tasks
+from flowy.core.db import Flow, FlowHistory, TaskHistory, get_session, get_running_tasks, get_flow_remarks
 
 
 class FlowService:
@@ -187,15 +187,28 @@ class FlowService:
                 except (ValueError, TypeError):
                     history.output_data = {}
 
-                # 解析触发器信息
+                # 解析触发器信息和备注
                 history.trigger_name = None
                 history.trigger_type = None
+                history.remarks = []
                 try:
                     metadata = json.safe_loads(history.flow_metadata or '{}')
                     history.trigger_name = metadata.get('trigger_name')
                     history.trigger_type = metadata.get('trigger_type')
+                    history.remarks = metadata.get('remarks', [])
                 except (ValueError, TypeError):
                     pass
+
+                # 计算备注的最高级别（用于前端显示图标颜色）
+                history.remark_level = None
+                if history.remarks:
+                    # 优先级：error > warning > info
+                    if any(r['level'] == 'error' for r in history.remarks):
+                        history.remark_level = 'error'
+                    elif any(r['level'] == 'warning' for r in history.remarks):
+                        history.remark_level = 'warning'
+                    else:
+                        history.remark_level = 'info'
 
                 # 对于运行中的历史记录，获取正在运行的任务及其进度
                 if history.status == 'running':
@@ -268,6 +281,23 @@ class FlowService:
                 history.output_data = json.safe_loads(history.output_data or '{}')
             except (ValueError, TypeError):
                 history.output_data = {}
+
+            # 解析备注信息
+            history.remarks = []
+            history.remark_level = None
+            try:
+                metadata = json.safe_loads(history.flow_metadata or '{}')
+                history.remarks = metadata.get('remarks', [])
+                # 计算备注的最高级别
+                if history.remarks:
+                    if any(r['level'] == 'error' for r in history.remarks):
+                        history.remark_level = 'error'
+                    elif any(r['level'] == 'warning' for r in history.remarks):
+                        history.remark_level = 'warning'
+                    else:
+                        history.remark_level = 'info'
+            except (ValueError, TypeError):
+                pass
 
             for task in task_histories:
                 try:
