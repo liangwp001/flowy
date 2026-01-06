@@ -10,7 +10,7 @@ from flowy.core.json_utils import json
 
 from flowy.core.context import flow_history_id_var
 from flowy.core.db import init_database, get_session, create_flow_history, update_flow_history, register_flow, FlowHistory
-from flowy.core.logger import get_flow_logger
+from flowy.core.logger import get_flow_logger, cleanup_flow_logger
 
 # 初始化数据库
 init_database()
@@ -207,6 +207,10 @@ def flow(flow_id, name=None, desc=None):
                     finally:
                         session.close()
                 logger.info(f'{"-" * 50} flow {name} end {"-" * 50}')
+
+                # 清理 flow history logger，释放文件句柄和内存
+                if flow_history_id:
+                    cleanup_flow_logger(flow_history_id)
 
         register_flow_func(flow_id=flow_id, func=wrapper)
         return wrapper

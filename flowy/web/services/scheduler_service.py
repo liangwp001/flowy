@@ -383,6 +383,7 @@ class SchedulerService:
 
         对比数据库中的触发器配置与 scheduler 中实际的 job，只更新不一致的部分。
         这解决了前端修改触发器后 scheduler 未及时更新的问题。
+        优化：减少临时对象创建，使用更高效的查询方式。
         """
         if cls._scheduler is None:
             logger.warning("调度器未初始化，跳过同步")
@@ -399,85 +400,61 @@ class SchedulerService:
                 'unchanged': 0
             }
 
-            # 获取所有数据库中的触发器
-            all_triggers = session.query(Trigger).all()
-            db_trigger_ids = set()
-
-            # 获取 scheduler 中所有的 trigger 任务
-            scheduler_jobs = cls._scheduler.get_jobs()
-            scheduler_job_ids = set()
-
-            for job in scheduler_jobs:
+            # 获取 scheduler 中所有的 trigger 任务 ID（使用字典存储 job 信息，避免重复查询）
+            scheduler_jobs_info = {}
+            for job in cls._scheduler.get_jobs():
                 if job.id.startswith('trigger_'):
                     try:
                         trigger_id = int(job.id.split('_')[1])
-                        scheduler_job_ids.add(trigger_id)
+                        scheduler_jobs_info[trigger_id] = {
+                            'job': job,
+                            'paused': job.next_run_time is None,
+                            'max_instances': getattr(job, 'max_instances', 1)
+                        }
                     except (ValueError, IndexError):
                         continue
 
-            # 处理数据库中的每个触发器
-            for trigger in all_triggers:
-                db_trigger_ids.add(trigger.id)
-                job_id = f"trigger_{trigger.id}"
-                job = cls._scheduler.get_job(job_id)
+            db_trigger_ids = set()
 
-                # 获取 max_instances，默认为 1
+            # 使用迭代器逐条处理触发器，避免一次性加载所有数据
+            for trigger in session.query(Trigger).yield_per(50):
+                db_trigger_ids.add(trigger.id)
+                job_info = scheduler_jobs_info.get(trigger.id)
                 max_instances = getattr(trigger, 'max_instances', 1) or 1
 
                 if trigger.enabled:
-                    # 触发器已启用
-                    if job is None:
+                    if job_info is None:
                         # 任务不存在，需要添加
                         try:
-                            cls.add_job(
-                                trigger.id,
-                                trigger.flow_id,
-                                trigger.cron_expression,
-                                max_instances=max_instances
-                            )
+                            cls.add_job(trigger.id, trigger.flow_id, trigger.cron_expression, max_instances=max_instances)
                             sync_result['added'] += 1
                             logger.info(f"同步添加触发器: {trigger.id} ({trigger.name})")
                         except Exception as e:
                             logger.error(f"同步添加触发器失败 {trigger.id}: {e}")
                     else:
-                        # 任务存在，检查是否需要更新
+                        job = job_info['job']
                         need_update = False
 
                         # 检查 cron 表达式是否变化
-                        job_trigger_str = str(job.trigger)
-                        # APScheduler 的 CronTrigger 字符串格式类似: cron[...]
-                        # 我们需要比较实际的 cron 表达式
                         if hasattr(job.trigger, 'fields'):
-                            # 提取 cron 表达式的各个字段
-                            field_values = []
-                            for field in job.trigger.fields:
-                                field_values.append(str(field))
-                            # 构建 cron 表达式字符串进行比较
-                            # 格式: minute hour day month day_of_week
-                            reconstructed_cron = ' '.join(field_values[:5])
+                            field_values = [str(field) for field in job.trigger.fields[:5]]
+                            reconstructed_cron = ' '.join(field_values)
                             if reconstructed_cron != trigger.cron_expression:
                                 need_update = True
 
                         # 检查 max_instances 是否变化
-                        if not need_update and hasattr(job, 'max_instances'):
-                            if job.max_instances != max_instances:
-                                need_update = True
+                        if not need_update and job_info['max_instances'] != max_instances:
+                            need_update = True
 
                         # 检查任务是否被暂停
-                        if not need_update and job.next_run_time is None:
-                            # 任务被暂停了，需要恢复
+                        if not need_update and job_info['paused']:
                             cls.resume_job(trigger.id)
                             sync_result['resumed'] += 1
                             logger.info(f"同步恢复触发器: {trigger.id} ({trigger.name})")
 
                         if need_update:
                             try:
-                                cls.add_job(
-                                    trigger.id,
-                                    trigger.flow_id,
-                                    trigger.cron_expression,
-                                    max_instances=max_instances
-                                )
+                                cls.add_job(trigger.id, trigger.flow_id, trigger.cron_expression, max_instances=max_instances)
                                 sync_result['updated'] += 1
                                 logger.info(f"同步更新触发器: {trigger.id} ({trigger.name})")
                             except Exception as e:
@@ -486,8 +463,7 @@ class SchedulerService:
                             sync_result['unchanged'] += 1
                 else:
                     # 触发器已禁用
-                    if job is not None:
-                        # 任务存在但触发器已禁用，暂停任务
+                    if job_info is not None:
                         try:
                             cls.pause_job(trigger.id)
                             sync_result['paused'] += 1
@@ -498,7 +474,7 @@ class SchedulerService:
                         sync_result['unchanged'] += 1
 
             # 移除 scheduler 中存在但数据库中不存在的任务
-            orphaned_job_ids = scheduler_job_ids - db_trigger_ids
+            orphaned_job_ids = set(scheduler_jobs_info.keys()) - db_trigger_ids
             for trigger_id in orphaned_job_ids:
                 try:
                     cls.remove_job(trigger_id)
@@ -736,43 +712,57 @@ class SchedulerService:
             session.close()
 
     @classmethod
-    def check_orphaned_jobs(cls, pending_timeout_minutes: int = 5, running_timeout_hours: int = 24):
+    def check_orphaned_jobs(cls, pending_timeout_minutes: int = 5, running_timeout_hours: int = 24,
+                            batch_size: int = 100):
         """检查孤儿任务（状态为 pending 或 running 但实际已丢失的任务）
 
         当 scheduler 重启时，等待中的即时任务会丢失。此方法定期检查并将这些任务标记为失败。
+        使用分页查询避免一次性加载大量数据到内存。
 
         Args:
             pending_timeout_minutes: pending 状态超时时间（分钟），超过此时间仍在 pending 则认为丢失
             running_timeout_hours: running 状态超时时间（小时），超过此时间仍在 running 则认为可能卡死
+            batch_size: 每批处理的记录数量，默认100
         """
-        session = get_session()
         now = datetime.now()
+        pending_timeout = timedelta(minutes=pending_timeout_minutes)
+        running_timeout = timedelta(hours=running_timeout_hours)
+
+        result = {
+            'pending_count': 0,
+            'running_count': 0,
+            'task_count': 0
+        }
+
+        # 获取 scheduler 中所有即时任务的 job_id 前缀（一次性获取，避免重复查询）
+        immediate_job_prefixes = set()
+        if cls._scheduler:
+            for job in cls._scheduler.get_jobs():
+                if job.id.startswith('immediate_') and job.next_run_time and job.next_run_time > now:
+                    # 提取 flow_id 部分: immediate_{flow_id}_{timestamp}
+                    parts = job.id.split('_')
+                    if len(parts) >= 2:
+                        immediate_job_prefixes.add(f"immediate_{parts[1]}_")
+
+        # 1. 分页处理 pending 状态超时的 FlowHistory
+        session = get_session()
         try:
-            # 1. 检查 pending 状态超时的 FlowHistory（即时任务丢失）
-            pending_timeout = timedelta(minutes=pending_timeout_minutes)
-            pending_histories = session.query(FlowHistory).filter(
-                FlowHistory.status == 'pending',
-                FlowHistory.created_at < (now - pending_timeout)
-            ).all()
+            offset = 0
+            while True:
+                pending_batch = session.query(FlowHistory).filter(
+                    FlowHistory.status == 'pending',
+                    FlowHistory.created_at < (now - pending_timeout)
+                ).limit(batch_size).offset(offset).all()
 
-            if pending_histories:
-                logger.warning(f"发现 {len(pending_histories)} 个超时的 pending 任务，检查 scheduler 中是否存在")
+                if not pending_batch:
+                    break
 
-                for history in pending_histories:
-                    # 检查 scheduler 中是否有对应的任务
-                    # 即时任务的 job_id 格式为 immediate_{flow_id}_{timestamp}
-                    # 由于时间戳格式问题，这里简化处理：如果 scheduler 重启，所有即时任务都会丢失
-                    # 因此我们可以假设如果 scheduler 中没有任何以 'immediate_{flow_id}_' 开头的任务，
-                    # 且该任务 pending 时间过长，则认为任务丢失
+                for history in pending_batch:
+                    # 检查是否有对应的即时任务
                     task_lost = True
-                    if cls._scheduler:
-                        jobs = cls._scheduler.get_jobs()
-                        for job in jobs:
-                            if job.id.startswith(f'immediate_{history.flow_id}_'):
-                                # 检查任务的下次运行时间
-                                if job.next_run_time and job.next_run_time > now:
-                                    task_lost = False
-                                    break
+                    prefix = f"immediate_{history.flow_id}_"
+                    if prefix in immediate_job_prefixes:
+                        task_lost = False
 
                     if task_lost:
                         logger.warning(f"FlowHistory {history.id} (flow={history.flow_id}) 任务丢失，标记为失败")
@@ -784,37 +774,44 @@ class SchedulerService:
                             'detected_at': now.isoformat()
                         })
 
-                        # 同时更新关联的 running 状态的 TaskHistory
-                        running_tasks = session.query(TaskHistory).filter(
+                        # 更新关联的 running 状态的 TaskHistory
+                        session.query(TaskHistory).filter(
                             TaskHistory.flow_history_id == history.id,
                             TaskHistory.status == 'running'
-                        ).all()
-                        for task in running_tasks:
-                            task.status = 'failed'
-                            task.end_time = now
-                            logger.info(f"同时标记 TaskHistory {task.id} 为失败")
+                        ).update({'status': 'failed', 'end_time': now}, synchronize_session=False)
+
+                        result['pending_count'] += 1
 
                 session.commit()
+                offset += batch_size
 
-            # 2. 检查 running 状态超时的 FlowHistory（可能卡死）
-            running_timeout = timedelta(hours=running_timeout_hours)
-            running_histories = session.query(FlowHistory).filter(
-                FlowHistory.status == 'running',
-                FlowHistory.start_time < (now - running_timeout)
-            ).all()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"处理 pending 孤儿任务时发生错误: {e}")
+        finally:
+            session.close()
 
-            if running_histories:
-                logger.warning(f"发现 {len(running_histories)} 个运行时间过长的任务 (> {running_timeout_hours}小时)")
+        # 2. 分页处理 running 状态超时的 FlowHistory
+        session = get_session()
+        try:
+            offset = 0
+            while True:
+                running_batch = session.query(FlowHistory).filter(
+                    FlowHistory.status == 'running',
+                    FlowHistory.start_time < (now - running_timeout)
+                ).limit(batch_size).offset(offset).all()
 
-                for history in running_histories:
+                if not running_batch:
+                    break
+
+                for history in running_batch:
                     # 检查是否有 TaskHistory 仍在运行
-                    running_tasks = session.query(TaskHistory).filter(
+                    running_tasks_count = session.query(TaskHistory).filter(
                         TaskHistory.flow_history_id == history.id,
                         TaskHistory.status == 'running'
                     ).count()
 
-                    if running_tasks == 0:
-                        # 没有任务在运行，说明 Flow 可能已结束但状态未更新
+                    if running_tasks_count == 0:
                         logger.warning(f"FlowHistory {history.id} 无运行中任务但状态为 running，标记为失败")
                         history.status = 'failed'
                         history.end_time = now
@@ -823,50 +820,54 @@ class SchedulerService:
                             'original_status': 'running',
                             'detected_at': now.isoformat()
                         })
-                    else:
-                        logger.warning(f"FlowHistory {history.id} 仍有 {running_tasks} 个任务在运行，保持观察")
+                        result['running_count'] += 1
 
                 session.commit()
+                offset += batch_size
 
-            # 3. 检查 TaskHistory 中孤儿任务
-            # 检查 running 状态超过超时时间的任务
-            orphaned_tasks = session.query(TaskHistory).filter(
-                TaskHistory.status == 'running',
-                TaskHistory.start_time < (now - running_timeout)
-            ).all()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"处理 running 孤儿任务时发生错误: {e}")
+        finally:
+            session.close()
 
-            if orphaned_tasks:
-                logger.warning(f"发现 {len(orphaned_tasks)} 个运行时间过长的 TaskHistory (> {running_timeout_hours}小时)")
-                for task in orphaned_tasks:
-                    # 检查对应的 FlowHistory 状态
+        # 3. 分页处理 TaskHistory 中的孤儿任务
+        session = get_session()
+        try:
+            offset = 0
+            while True:
+                orphaned_batch = session.query(TaskHistory).filter(
+                    TaskHistory.status == 'running',
+                    TaskHistory.start_time < (now - running_timeout)
+                ).limit(batch_size).offset(offset).all()
+
+                if not orphaned_batch:
+                    break
+
+                for task in orphaned_batch:
                     flow_history = session.query(FlowHistory).filter(
                         FlowHistory.id == task.flow_history_id
                     ).first()
 
                     if flow_history and flow_history.status in ['completed', 'failed']:
-                        # Flow 已结束但任务状态未更新
                         logger.warning(f"TaskHistory {task.id} 的 Flow 已结束，标记任务状态")
                         task.status = flow_history.status
                         task.end_time = flow_history.end_time
-                    elif flow_history and flow_history.status == 'running':
-                        # 计算任务运行时长
-                        if task.start_time:
-                            runtime = now - task.start_time
-                            logger.warning(
-                                f"TaskHistory {task.id} (flow_history={task.flow_history_id}) "
-                                f"已运行 {runtime.total_seconds() / 3600:.1f} 小时"
-                            )
+                        result['task_count'] += 1
 
                 session.commit()
+                offset += batch_size
 
         except Exception as e:
             session.rollback()
-            logger.error(f"检查孤儿任务时发生错误: {e}")
+            logger.error(f"处理 TaskHistory 孤儿任务时发生错误: {e}")
         finally:
             session.close()
 
-        return {
-            'pending_count': len(pending_histories) if 'pending_histories' in locals() else 0,
-            'running_count': len(running_histories) if 'running_histories' in locals() else 0,
-            'task_count': len(orphaned_tasks) if 'orphaned_tasks' in locals() else 0
-        }
+        if result['pending_count'] > 0 or result['running_count'] > 0 or result['task_count'] > 0:
+            logger.info(
+                f"孤儿任务检查完成: pending={result['pending_count']}, "
+                f"running={result['running_count']}, task={result['task_count']}"
+            )
+
+        return result

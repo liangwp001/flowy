@@ -185,6 +185,11 @@ def create_app():
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(triggers_bp)
 
+    # 注册应用关闭时的清理函数
+    import atexit
+    from flowy.core.logger import cleanup_all_flow_loggers
+    atexit.register(cleanup_all_flow_loggers)
+
     # 主页重定向
     @app.route('/')
     def index():

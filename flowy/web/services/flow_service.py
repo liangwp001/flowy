@@ -16,15 +16,22 @@ class FlowService:
 
     @staticmethod
     def get_all_flows_with_stats() -> List[Dict]:
-        """获取所有Flow及其统计信息（用于侧边栏）"""
+        """获取所有Flow及其统计信息（用于侧边栏）
+        
+        优化：使用单个会话完成所有查询，避免嵌套会话导致的连接泄露
+        """
         session = get_session()
         try:
             flows = session.query(Flow).order_by(Flow.name).all()
 
             flows_with_stats = []
             for flow in flows:
+                # 在同一个会话中获取统计信息，避免创建新会话
+                stats = FlowService._get_flow_statistics_with_session(session, flow.id)
+                
+                # 分离对象
                 session.expunge(flow)
-                stats = FlowService.get_flow_statistics(flow.id)
+                
                 flows_with_stats.append({
                     'flow': flow,
                     'stats': stats
@@ -33,6 +40,82 @@ class FlowService:
             return flows_with_stats
         finally:
             session.close()
+
+    @staticmethod
+    def _get_flow_statistics_with_session(session, flow_id: str) -> Dict:
+        """使用现有会话获取Flow的统计信息（内部方法，避免创建新会话）"""
+        total_count = session.query(func.count(FlowHistory.id)).filter(
+            FlowHistory.flow_id == flow_id
+        ).scalar() or 0
+
+        success_count = session.query(func.count(FlowHistory.id)).filter(
+            FlowHistory.flow_id == flow_id,
+            FlowHistory.status == 'completed'
+        ).scalar() or 0
+
+        failed_count = session.query(func.count(FlowHistory.id)).filter(
+            FlowHistory.flow_id == flow_id,
+            FlowHistory.status == 'failed'
+        ).scalar() or 0
+
+        running_count = session.query(func.count(FlowHistory.id)).filter(
+            FlowHistory.flow_id == flow_id,
+            FlowHistory.status == 'running'
+        ).scalar() or 0
+
+        pending_count = session.query(func.count(FlowHistory.id)).filter(
+            FlowHistory.flow_id == flow_id,
+            FlowHistory.status == 'pending'
+        ).scalar() or 0
+
+        success_rate = (success_count / total_count * 100) if total_count > 0 else 0
+
+        # 计算平均执行时长 - 使用聚合查询而非加载所有记录
+        avg_duration_result = session.query(
+            func.avg(
+                func.julianday(FlowHistory.end_time) - func.julianday(FlowHistory.start_time)
+            ) * 86400  # 转换为秒
+        ).filter(
+            FlowHistory.flow_id == flow_id,
+            FlowHistory.status == 'completed',
+            FlowHistory.start_time.isnot(None),
+            FlowHistory.end_time.isnot(None)
+        ).scalar()
+        
+        avg_duration = round(avg_duration_result, 1) if avg_duration_result else 0
+
+        # 计算平均等待时长
+        avg_wait_result = session.query(
+            func.avg(
+                func.julianday(FlowHistory.start_time) - func.julianday(FlowHistory.created_at)
+            ) * 86400
+        ).filter(
+            FlowHistory.flow_id == flow_id,
+            FlowHistory.status.in_(['pending', 'running']),
+            FlowHistory.start_time.isnot(None)
+        ).scalar()
+        
+        avg_wait_time = round(avg_wait_result, 1) if avg_wait_result else 0
+
+        latest_history = session.query(FlowHistory).filter(
+            FlowHistory.flow_id == flow_id
+        ).order_by(desc(FlowHistory.created_at)).first()
+
+        latest_status = latest_history.status if latest_history else None
+        latest_execution = latest_history.created_at if latest_history else None
+
+        return {
+            'total_count': total_count,
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'running_count': running_count,
+            'pending_count': pending_count,
+            'success_rate': round(success_rate, 2),
+            'avg_duration': avg_duration,
+            'avg_wait_time': avg_wait_time,
+            'latest_status': latest_status,
+            'latest_execution': latest_execution
+        }
 
     @staticmethod
     def get_flows_paginated(page: int = 1, per_page: int = 20, search: str = None) -> Tuple[List[Flow], int]:
@@ -69,85 +152,13 @@ class FlowService:
 
     @staticmethod
     def get_flow_statistics(flow_id: str) -> Dict:
-        """获取Flow的统计信息"""
+        """获取Flow的统计信息
+        
+        优化：使用聚合查询代替加载所有记录到内存
+        """
         session = get_session()
         try:
-            total_count = session.query(func.count(FlowHistory.id)).filter(
-                FlowHistory.flow_id == flow_id
-            ).scalar() or 0
-
-            success_count = session.query(func.count(FlowHistory.id)).filter(
-                FlowHistory.flow_id == flow_id,
-                FlowHistory.status == 'completed'
-            ).scalar() or 0
-
-            failed_count = session.query(func.count(FlowHistory.id)).filter(
-                FlowHistory.flow_id == flow_id,
-                FlowHistory.status == 'failed'
-            ).scalar() or 0
-
-            running_count = session.query(func.count(FlowHistory.id)).filter(
-                FlowHistory.flow_id == flow_id,
-                FlowHistory.status == 'running'
-            ).scalar() or 0
-
-            pending_count = session.query(func.count(FlowHistory.id)).filter(
-                FlowHistory.flow_id == flow_id,
-                FlowHistory.status == 'pending'
-            ).scalar() or 0
-
-            success_rate = (success_count / total_count * 100) if total_count > 0 else 0
-
-            # 计算平均执行时长
-            completed_histories = session.query(FlowHistory).filter(
-                FlowHistory.flow_id == flow_id,
-                FlowHistory.status == 'completed',
-                FlowHistory.start_time.isnot(None),
-                FlowHistory.end_time.isnot(None)
-            ).all()
-
-            avg_duration = 0
-            if completed_histories:
-                total_duration = sum(
-                    (h.end_time - h.start_time).total_seconds()
-                    for h in completed_histories
-                )
-                avg_duration = total_duration / len(completed_histories)
-
-            # 计算平均等待时长（针对pending和running的任务）
-            waiting_histories = session.query(FlowHistory).filter(
-                FlowHistory.flow_id == flow_id,
-                FlowHistory.status.in_(['pending', 'running']),
-                FlowHistory.start_time.isnot(None)
-            ).all()
-
-            avg_wait_time = 0
-            if waiting_histories:
-                total_wait_time = sum(
-                    (h.start_time - h.created_at).total_seconds()
-                    for h in waiting_histories
-                )
-                avg_wait_time = total_wait_time / len(waiting_histories)
-
-            latest_history = session.query(FlowHistory).filter(
-                FlowHistory.flow_id == flow_id
-            ).order_by(desc(FlowHistory.created_at)).first()
-
-            latest_status = latest_history.status if latest_history else None
-            latest_execution = latest_history.created_at if latest_history else None
-
-            return {
-                'total_count': total_count,
-                'success_count': success_count,
-                'failed_count': failed_count,
-                'running_count': running_count,
-                'pending_count': pending_count,
-                'success_rate': round(success_rate, 2),
-                'avg_duration': round(avg_duration, 1) if avg_duration else 0,
-                'avg_wait_time': round(avg_wait_time, 1) if avg_wait_time else 0,
-                'latest_status': latest_status,
-                'latest_execution': latest_execution
-            }
+            return FlowService._get_flow_statistics_with_session(session, flow_id)
         finally:
             session.close()
 
