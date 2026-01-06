@@ -27,10 +27,18 @@ def create_app():
 
     # 注册模板过滤器
     @app.template_filter('datetime')
-    def format_datetime(value, format='%Y-%m-%d %H:%M:%S'):
+    def format_datetime(value):
+        """智能日期时间格式化：当年不显示年份"""
         if value is None:
             return ''
-        return value.strftime(format)
+        from datetime import datetime
+        current_year = datetime.now().year
+        if value.year == current_year:
+            # 当年：只显示月日时:分:秒
+            return value.strftime('%m-%d %H:%M:%S')
+        else:
+            # 非当年：显示完整日期
+            return value.strftime('%Y-%m-%d %H:%M:%S')
 
     @app.template_filter('time_format')
     def format_time(value, format='%H:%M:%S'):

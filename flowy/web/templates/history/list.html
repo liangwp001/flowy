@@ -408,88 +408,6 @@
     }
 }
 
-/* 进度条样式 */
-.task-progress-container {
-    max-width: 200px;
-}
-
-.task-progress-wrapper {
-    margin-bottom: 0.25rem;
-}
-
-.task-progress-name {
-    font-size: 0.75rem;
-    color: #6b7280;
-    margin-bottom: 0.25rem;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.task-progress-bar {
-    height: 6px;
-    background: #e5e7eb;
-    border-radius: 3px;
-    overflow: hidden;
-    position: relative;
-}
-
-.task-progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #6366f1);
-    border-radius: 3px;
-    transition: width 0.3s ease;
-}
-
-.task-progress-fill.animated {
-    background: linear-gradient(90deg, #3b82f6, #6366f1, #3b82f6);
-    background-size: 200% 100%;
-    animation: progressShimmer 1.5s infinite;
-}
-
-@keyframes progressShimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-.task-progress-text {
-    font-size: 0.75rem;
-    color: #6b7280;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.task-progress-percent {
-    font-weight: 600;
-    color: #3b82f6;
-}
-
-.task-progress-message {
-    color: #9ca3af;
-}
-
-.task-progress-loading {
-    color: #6b7280;
-    font-size: 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.task-progress-loading .spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid #e5e7eb;
-    border-top-color: #3b82f6;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
 /* 展开/折叠功能样式 */
 .expandable-row {
     cursor: pointer;
@@ -709,6 +627,152 @@
     border-radius: 0.5rem;
     font-size: 0.875rem;
 }
+
+/* ============================================
+   当前任务列样式
+=========================================== */
+.current-task-cell {
+    padding: 0.5rem 0;
+}
+
+.current-task-item {
+    padding: 0.5rem 0;
+}
+
+.current-task-item:not(:last-child) {
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px dashed #e5e7eb;
+}
+
+.task-name {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #1f2937;
+    margin-bottom: 0.375rem;
+}
+
+.task-icon {
+    font-size: 0.75rem;
+}
+
+.task-icon.running {
+    color: #3b82f6;
+}
+
+.task-icon.completed {
+    color: #10b981;
+}
+
+.task-icon.failed {
+    color: #ef4444;
+}
+
+.task-icon.pending {
+    color: #9ca3af;
+}
+
+.task-progress-bar {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.25rem;
+}
+
+.task-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #6366f1);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.task-progress-fill.animated {
+    background: linear-gradient(90deg, #3b82f6, #6366f1, #3b82f6);
+    background-size: 200% 100%;
+    animation: progressShimmer 1.5s infinite;
+}
+
+@keyframes progressShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.task-progress-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.task-progress-percent {
+    font-weight: 600;
+    color: #3b82f6;
+}
+
+.task-progress-message {
+    color: #9ca3af;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-running-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.task-running-indicator .spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.no-current-task {
+    color: #9ca3af;
+    font-size: 0.875rem;
+}
+
+/* ============================================
+   时间信息列样式
+=========================================== */
+.time-info-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem 0;
+}
+
+.time-info-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.time-label {
+    color: #9ca3af;
+    font-weight: 500;
+    min-width: 32px;
+}
+
+.time-value {
+    color: #4b5563;
+}
 </style>
 {% endblock %}
 
@@ -910,14 +974,13 @@
                             </th>
                             <th width="40"></th>
                             <th width="80">ID</th>
-                            <th>状态</th>
-                            <th>触发方式</th>
-                            <th>创建时间</th>
-                            <th>开始时间</th>
-                            <th>结束时间</th>
-                            <th>执行时长</th>
-                            <th>输入数据</th>
-                            <th>输出数据</th>
+                            <th width="100">状态</th>
+                            <th width="200">当前任务</th>
+                            <th width="160">时间信息</th>
+                            <th width="80">触发方式</th>
+                            <th width="100">执行时长</th>
+                            <th width="70">输入</th>
+                            <th width="70">输出</th>
                             <th width="150">操作</th>
                         </tr>
                     </thead>
@@ -940,6 +1003,68 @@
                                 </span>
                             </td>
                             <td>
+                                <div class="current-task-cell" data-history-id="{{ history.id }}">
+                                    {% if history.status == 'running' and history.running_tasks %}
+                                        {% for task in history.running_tasks %}
+                                        <div class="current-task-item">
+                                            <div class="task-name">
+                                                <i class="bi bi-gear-fill task-icon running"></i>
+                                                <span>{{ task.name }}</span>
+                                            </div>
+                                            {% if task.progress is not none %}
+                                            <div class="task-progress-bar">
+                                                <div class="task-progress-fill animated" style="width: {{ task.progress }}%"></div>
+                                            </div>
+                                            <div class="task-progress-info">
+                                                <span class="task-progress-percent">{{ task.progress }}%</span>
+                                                {% if task.progress_message %}
+                                                <span class="task-progress-message">{{ task.progress_message }}</span>
+                                                {% endif %}
+                                            </div>
+                                            {% else %}
+                                            <div class="task-running-indicator">
+                                                <span class="spinner"></span>
+                                                <span>执行中...</span>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    {% elif history.running_tasks %}
+                                        {# 非运行状态，显示最后一个任务 #}
+                                        {% for task in history.running_tasks %}
+                                        <div class="current-task-item completed">
+                                            <div class="task-name">
+                                                <i class="bi bi-{% if task.status == 'completed' %}check-circle-fill{% elif task.status == 'failed' %}x-circle-fill{% else %}gear-fill{% endif %} task-icon {{ task.status }}"></i>
+                                                <span>{{ task.name }}</span>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="no-current-task">-</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="time-info-cell">
+                                    <div class="time-info-row">
+                                        <span class="time-label">创建</span>
+                                        <span class="time-value">{{ history.created_at|datetime }}</span>
+                                    </div>
+                                    {% if history.start_time %}
+                                    <div class="time-info-row">
+                                        <span class="time-label">开始</span>
+                                        <span class="time-value">{{ history.start_time|datetime }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if history.end_time %}
+                                    <div class="time-info-row">
+                                        <span class="time-label">结束</span>
+                                        <span class="time-value">{{ history.end_time|datetime }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
                                 {% if history.trigger_name %}
                                     <span class="trigger-badge trigger-scheduled" title="触发器: {{ history.trigger_name }}">
                                         <i class="bi bi-clock-history"></i>
@@ -952,9 +1077,6 @@
                                     </span>
                                 {% endif %}
                             </td>
-                            <td>{{ history.created_at|datetime }}</td>
-                            <td>{{ history.start_time|datetime if history.start_time else '-' }}</td>
-                            <td>{{ history.end_time|datetime if history.end_time else '-' }}</td>
                             <td>
                                 <span style="color: #6b7280;" class="duration-cell"
                                       {% if history.status == 'running' and history.start_time %}
@@ -970,10 +1092,10 @@
                                     <button type="button" class="data-preview-btn view-data-btn"
                                             data-title="输入数据"
                                             data-data='{{ history.input_data|tojson|e }}'>
-                                        <i class="bi bi-eye"></i> 预览
+                                        <i class="bi bi-eye"></i>
                                     </button>
                                 {% else %}
-                                    <span style="color: #9ca3af;">无</span>
+                                    <span style="color: #9ca3af;">-</span>
                                 {% endif %}
                             </td>
                             <td onclick="event.stopPropagation()">
@@ -981,10 +1103,10 @@
                                     <button type="button" class="data-preview-btn view-data-btn"
                                             data-title="输出数据"
                                             data-data='{{ history.output_data|tojson|e }}'>
-                                        <i class="bi bi-eye"></i> 预览
+                                        <i class="bi bi-eye"></i>
                                     </button>
                                 {% else %}
-                                    <span style="color: #9ca3af;">无</span>
+                                    <span style="color: #9ca3af;">-</span>
                                 {% endif %}
                             </td>
                             <td onclick="event.stopPropagation()">
@@ -1012,7 +1134,7 @@
                             </td>
                         </tr>
                         <tr class="task-detail-row" data-detail-for="{{ history.id }}">
-                            <td colspan="12" class="task-detail-cell">
+                            <td colspan="11" class="task-detail-cell">
                                 <div class="task-list-container" id="taskList-{{ history.id }}">
                                     <div class="task-list-loading">
                                         <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
@@ -2435,53 +2557,114 @@ const FLOW_ID = '{{ flow.id }}';
 const POLLING_INTERVAL = 2000;  // 2秒轮询一次
 
 /**
- * 渲染任务进度条
+ * 渲染当前任务列内容
  */
-function renderTaskProgress(runningTasks) {
-    if (!runningTasks || runningTasks.length === 0) {
-        return '<span class="text-muted" style="font-size: 0.875rem;">-</span>';
+function renderCurrentTaskCell(history) {
+    // 运行中状态，显示进度
+    if (history.status === 'running' && history.running_tasks && history.running_tasks.length > 0) {
+        let html = '';
+        history.running_tasks.forEach(task => {
+            const progress = task.progress;
+            const message = task.progress_message;
+
+            html += '<div class="current-task-item">';
+            html += '<div class="task-name">';
+            html += '<i class="bi bi-gear-fill task-icon running"></i>';
+            html += `<span>${escapeHtml(task.name)}</span>`;
+            html += '</div>';
+
+            if (progress !== null && progress !== undefined) {
+                // 有进度信息，显示进度条
+                html += '<div class="task-progress-bar">';
+                html += '<div class="task-progress-fill animated" style="width: ' + progress + '%"></div>';
+                html += '</div>';
+                html += '<div class="task-progress-info">';
+                html += `<span class="task-progress-percent">${progress}%</span>`;
+                if (message) {
+                    html += `<span class="task-progress-message">${escapeHtml(message)}</span>`;
+                }
+                html += '</div>';
+            } else {
+                // 无进度信息，显示加载中状态
+                html += '<div class="task-running-indicator">';
+                html += '<span class="spinner"></span>';
+                html += '<span>执行中...</span>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+        });
+        return html;
     }
+    // 非运行状态，显示最后一个任务
+    else if (history.running_tasks && history.running_tasks.length > 0) {
+        let html = '';
+        history.running_tasks.forEach(task => {
+            const status = task.status || history.status;
+            const iconClass = status === 'completed' ? 'check-circle-fill' :
+                              status === 'failed' ? 'x-circle-fill' : 'gear-fill';
 
-    let html = '<div class="task-progress-container">';
-    runningTasks.forEach(task => {
-        const progress = task.progress;
-        const message = task.progress_message;
+            html += '<div class="current-task-item completed">';
+            html += '<div class="task-name">';
+            html += `<i class="bi bi-${iconClass} task-icon ${status}"></i>`;
+            html += `<span>${escapeHtml(task.name)}</span>`;
+            html += '</div>';
+            html += '</div>';
+        });
+        return html;
+    } else {
+        // 没有任务信息
+        return '<span class="no-current-task">-</span>';
+    }
+}
 
-        if (progress !== null && progress !== undefined) {
-            // 有进度信息，显示进度条
-            html += `
-                <div class="task-progress-wrapper">
-                    <div class="task-progress-name">
-                        <i class="bi bi-gear-fill"></i>
-                        <span>${escapeHtml(task.name)}</span>
-                    </div>
-                    <div class="task-progress-bar">
-                        <div class="task-progress-fill animated" style="width: ${progress}%"></div>
-                    </div>
-                    <div class="task-progress-text">
-                        <span class="task-progress-percent">${progress}%</span>
-                        ${message ? `<span class="task-progress-message">${escapeHtml(message)}</span>` : ''}
-                    </div>
-                </div>
-            `;
+/**
+ * 渲染时间信息列内容
+ */
+function renderTimeInfoCell(history) {
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const currentYear = new Date().getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+
+        // 当年不显示年份，非当年显示完整日期
+        if (date.getFullYear() === currentYear) {
+            return `${month}-${day} ${hours}:${minutes}:${seconds}`;
         } else {
-            // 无进度信息，显示加载中状态
-            html += `
-                <div class="task-progress-wrapper">
-                    <div class="task-progress-name">
-                        <i class="bi bi-gear-fill"></i>
-                        <span>${escapeHtml(task.name)}</span>
-                    </div>
-                    <div class="task-progress-loading">
-                        <span class="spinner"></span>
-                        <span>执行中...</span>
-                    </div>
-                </div>
-            `;
+            return `${date.getFullYear()}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         }
-    });
+    };
+
+    let html = '<div class="time-info-cell">';
+
+    // 创建时间
+    html += '<div class="time-info-row">';
+    html += '<span class="time-label">创建</span>';
+    html += `<span class="time-value">${formatDate(history.created_at)}</span>`;
     html += '</div>';
 
+    // 开始时间
+    if (history.start_time) {
+        html += '<div class="time-info-row">';
+        html += '<span class="time-label">开始</span>';
+        html += `<span class="time-value">${formatDate(history.start_time)}</span>`;
+        html += '</div>';
+    }
+
+    // 结束时间
+    if (history.end_time) {
+        html += '<div class="time-info-row">';
+        html += '<span class="time-label">结束</span>';
+        html += `<span class="time-value">${formatDate(history.end_time)}</span>`;
+        html += '</div>';
+    }
+
+    html += '</div>';
     return html;
 }
 
@@ -2489,13 +2672,13 @@ function renderTaskProgress(runningTasks) {
  * 更新所有运行中任务的进度
  */
 function updateTaskProgress() {
-    const progressCells = document.querySelectorAll('.progress-cell');
-    if (progressCells.length === 0) {
+    const currentTaskCells = document.querySelectorAll('.current-task-cell');
+    if (currentTaskCells.length === 0) {
         return;
     }
 
     // 获取所有历史记录的ID
-    const historyIds = Array.from(progressCells).map(cell => cell.dataset.historyId);
+    const historyIds = Array.from(currentTaskCells).map(cell => parseInt(cell.dataset.historyId));
 
     // 批量获取进度信息
     fetch(`/api/flows/${FLOW_ID}/history`)
@@ -2508,25 +2691,38 @@ function updateTaskProgress() {
                 });
 
                 // 更新每个历史记录的进度
-                progressCells.forEach(cell => {
+                currentTaskCells.forEach(cell => {
                     const historyId = parseInt(cell.dataset.historyId);
                     const history = historiesMap[historyId];
 
                     if (history) {
-                        if (history.status === 'running' && history.running_tasks && history.running_tasks.length > 0) {
-                            // 运行中有任务，显示进度
-                            cell.innerHTML = renderTaskProgress(history.running_tasks);
-                        } else if (history.status === 'running') {
-                            // 运行中但没有返回任务信息，显示加载中
-                            cell.innerHTML = `
-                                <div class="task-progress-loading">
-                                    <span class="spinner"></span>
-                                    <span>加载中...</span>
-                                </div>
-                            `;
-                        } else {
-                            // 非运行状态，显示"-"
-                            cell.innerHTML = '<span class="text-muted" style="font-size: 0.875rem;">-</span>';
+                        // 更新当前任务列
+                        cell.innerHTML = renderCurrentTaskCell(history);
+
+                        // 同时更新时间信息列
+                        const row = cell.closest('tr');
+                        if (row) {
+                            const timeInfoCell = row.querySelector('.time-info-cell');
+                            if (timeInfoCell && timeInfoCell.parentElement) {
+                                timeInfoCell.parentElement.innerHTML = renderTimeInfoCell(history);
+                            }
+                        }
+
+                        // 更新状态徽章
+                        const statusCell = row.querySelector('td:nth-child(4)');
+                        if (statusCell && history.status !== statusCell.dataset.originalStatus) {
+                            const statusBadge = statusCell.querySelector('.status-badge');
+                            if (statusBadge) {
+                                statusBadge.className = `status-badge ${history.status}`;
+                                const icon = statusBadge.querySelector('i');
+                                const text = statusBadge.childNodes[statusBadge.childNodes.length - 1];
+                                if (icon) {
+                                    icon.className = `bi bi-${history.status === 'pending' ? 'clock' : history.status === 'running' ? 'arrow-repeat' : history.status === 'completed' ? 'check-circle' : history.status === 'failed' ? 'x-circle' : 'question-circle'}`;
+                                }
+                                if (text && text.nodeType === Node.TEXT_NODE) {
+                                    text.textContent = ` ${history.status === 'pending' ? '等待中' : history.status === 'running' ? '运行中' : history.status === 'completed' ? '已完成' : history.status === 'failed' ? '失败' : history.status}`;
+                                }
+                            }
                         }
                     }
                 });
@@ -2577,7 +2773,6 @@ function initProgressPolling() {
     updateTaskProgress();
 
     // 检查是否有运行中的任务
-    const runningCells = document.querySelectorAll('.progress-cell');
     let hasRunning = false;
 
     // 通过状态列检查是否有运行中的任务

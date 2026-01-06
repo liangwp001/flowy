@@ -211,7 +211,22 @@ class FlowService:
                         for t in running_tasks
                     ]
                 else:
-                    history.running_tasks = []
+                    # 对于非运行状态，获取最后一个任务用于展示
+                    last_task = session.query(TaskHistory).filter(
+                        TaskHistory.flow_history_id == history.id
+                    ).order_by(desc(TaskHistory.created_at)).first()
+                    if last_task:
+                        history.running_tasks = [
+                            {
+                                'id': last_task.id,
+                                'name': last_task.name,
+                                'status': last_task.status,
+                                'progress': None,
+                                'progress_message': None
+                            }
+                        ]
+                    else:
+                        history.running_tasks = []
 
             return histories, (total + per_page - 1) // per_page
         finally:
