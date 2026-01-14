@@ -1238,12 +1238,16 @@
                                 {% endif %}
                             </td>
                             <td onclick="event.stopPropagation()">
-                                {% if history.output_data %}
-                                    <button type="button" class="data-preview-btn view-data-btn"
+                                {% if history.status in ['completed', 'failed'] %}
+                                    <button type="button" class="data-preview-btn view-output-btn"
                                             data-title="输出数据"
-                                            data-data='{{ history.output_data|tojson|e }}'>
+                                            data-history-id="{{ history.id }}">
                                         <i class="bi bi-eye"></i>
                                     </button>
+                                {% elif history.status == 'running' %}
+                                    <span style="color: #9ca3af;" title="执行中...">
+                                        <i class="bi bi-hourglass-split"></i>
+                                    </span>
                                 {% else %}
                                     <span style="color: #9ca3af;">-</span>
                                 {% endif %}
@@ -1818,6 +1822,40 @@ function handleDataPreviewClick(event) {
     const data = button.dataset.data;
 
     viewData(data, title);
+}
+
+// 处理输出数据预览按钮点击事件（通过API加载）
+async function handleOutputPreviewClick(event) {
+    const button = event.currentTarget;
+    const historyId = button.dataset.historyId;
+    const originalHTML = button.innerHTML;
+    
+    // 显示加载状态
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    button.disabled = true;
+    
+    try {
+        const response = await fetch(`/api/history/${historyId}/output`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const outputData = result.data.output_data;
+            if (outputData && Object.keys(outputData).length > 0) {
+                viewData(JSON.stringify(outputData), '输出数据');
+            } else {
+                showNotification('暂无输出数据', 'info');
+            }
+        } else {
+            showNotification(result.error || '加载失败', 'error');
+        }
+    } catch (error) {
+        console.error('加载输出数据失败:', error);
+        showNotification('加载输出数据失败', 'error');
+    } finally {
+        // 恢复按钮状态
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+    }
 }
 
 // 复制数据
@@ -2826,6 +2864,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const viewDataButtons = document.querySelectorAll('.view-data-btn');
     viewDataButtons.forEach(button => {
         button.addEventListener('click', handleDataPreviewClick);
+    });
+
+    // 为输出数据预览按钮添加事件监听器（通过API加载）
+    const viewOutputButtons = document.querySelectorAll('.view-output-btn');
+    viewOutputButtons.forEach(button => {
+        button.addEventListener('click', handleOutputPreviewClick);
     });
 
     // 初始化进度轮询

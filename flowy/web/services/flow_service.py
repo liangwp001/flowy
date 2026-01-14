@@ -152,6 +152,37 @@ class FlowService:
             session.close()
 
     @staticmethod
+    def get_flow_history_output(history_id: int) -> Optional[Dict]:
+        """获取执行历史的输出数据（用于列表页按需加载）
+        
+        Args:
+            history_id: 执行历史ID
+            
+        Returns:
+            解析后的输出数据字典，如果记录不存在返回 None
+        """
+        session = get_session()
+        try:
+            # 只查询 output_data 字段
+            history = session.query(FlowHistory).options(
+                load_only(FlowHistory.id, FlowHistory.output_data)
+            ).filter(FlowHistory.id == history_id).first()
+            
+            if not history:
+                return None
+            
+            try:
+                output = json.safe_loads(history.output_data or '{}')
+                # 处理双重编码的情况
+                if isinstance(output, str):
+                    output = json.safe_loads(output)
+                return output
+            except (ValueError, TypeError):
+                return {}
+        finally:
+            session.close()
+
+    @staticmethod
     def get_flow_statistics(flow_id: str) -> Dict:
         """获取Flow的统计信息
         

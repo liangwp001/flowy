@@ -237,6 +237,24 @@ def api_delete_history(history_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@api_bp.route('/history/<int:history_id>/output', methods=['GET'])
+def api_get_history_output(history_id):
+    """获取执行历史的输出数据API（用于列表页预览）"""
+    try:
+        output_data = FlowService.get_flow_history_output(history_id)
+        if output_data is None:
+            return jsonify({'success': False, 'error': 'History not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'output_data': output_data
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/history/batch-delete', methods=['POST'])
 def api_batch_delete_history():
     """批量删除执行历史API"""
