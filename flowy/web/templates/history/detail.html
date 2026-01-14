@@ -357,15 +357,17 @@
                         </div>
                         {% endif %}
 
-                        {% if task.input_data or task.output_data %}
+                        {# Task 输入输出数据 - 通过API按需加载 #}
                         <div class="task-accordion">
                             <div class="accordion" id="taskAccordion{{ loop.index }}">
-                                {% if task.input_data %}
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button"
+                                        <button class="accordion-button collapsed task-data-btn" type="button"
                                                 data-bs-toggle="collapse"
-                                                data-bs-target="#inputCollapse{{ loop.index }}">
+                                                data-bs-target="#inputCollapse{{ loop.index }}"
+                                                data-task-id="{{ task.id }}"
+                                                data-data-type="input"
+                                                data-loaded="false">
                                             <i class="bi bi-arrow-down-circle me-2"></i>
                                             输入数据
                                         </button>
@@ -375,18 +377,23 @@
                                          data-bs-parent="#taskAccordion{{ loop.index }}">
                                         <div class="accordion-body">
                                             <div class="json-container">
+                                                <div class="task-data-loading" style="display: none;">
+                                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                                    <span class="ms-2">加载中...</span>
+                                                </div>
                                                 <div class="json-viewer" id="task-input-{{ loop.index }}"></div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                {% endif %}
-                                {% if task.output_data %}
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button"
+                                        <button class="accordion-button collapsed task-data-btn" type="button"
                                                 data-bs-toggle="collapse"
-                                                data-bs-target="#outputCollapse{{ loop.index }}">
+                                                data-bs-target="#outputCollapse{{ loop.index }}"
+                                                data-task-id="{{ task.id }}"
+                                                data-data-type="output"
+                                                data-loaded="false">
                                             <i class="bi bi-arrow-up-circle me-2"></i>
                                             输出数据
                                         </button>
@@ -396,15 +403,17 @@
                                          data-bs-parent="#taskAccordion{{ loop.index }}">
                                         <div class="accordion-body">
                                             <div class="json-container">
+                                                <div class="task-data-loading" style="display: none;">
+                                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                                    <span class="ms-2">加载中...</span>
+                                                </div>
                                                 <div class="json-viewer" id="task-output-{{ loop.index }}"></div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                {% endif %}
                             </div>
                         </div>
-                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -1259,66 +1268,98 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
-    // 渲染所有 Task 的输入输出数据
-    {% for task in task_histories %}
-    {% if task.input_data %}
-    (function() {
+    // 渲染所有 Task 的输入输出数据 - 改为按需加载
+    // Task 数据缓存
+    const taskDataCache = {};
+    
+    // 加载 Task 数据的函数
+    async function loadTaskData(taskId, dataType, viewerElementId) {
+        const cacheKey = `${taskId}_${dataType}`;
+        
+        // 检查缓存
+        if (taskDataCache[cacheKey] !== undefined) {
+            renderTaskData(taskDataCache[cacheKey], viewerElementId);
+            return;
+        }
+        
+        // 显示加载状态
+        const viewerElement = document.getElementById(viewerElementId);
+        const loadingElement = viewerElement?.parentElement?.querySelector('.task-data-loading');
+        if (loadingElement) loadingElement.style.display = 'block';
+        if (viewerElement) viewerElement.innerHTML = '';
+        
         try {
-            let inputData = {{ task.input_data|tojson }};
+            const response = await fetch(`/api/task/${taskId}/data`);
+            const result = await response.json();
             
-            // 检查是否是字符串形式的JSON，如果是则解析它
-            if (typeof inputData === 'string') {
+            if (result.success) {
+                const data = dataType === 'input' ? result.data.input_data : result.data.output_data;
+                taskDataCache[cacheKey] = data;
+                renderTaskData(data, viewerElementId);
+            } else {
+                if (viewerElement) {
+                    viewerElement.innerHTML = '<div style="color: var(--text-muted);">暂无数据</div>';
+                }
+            }
+        } catch (error) {
+            console.error('加载 Task 数据失败:', error);
+            if (viewerElement) {
+                viewerElement.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 加载失败</div>';
+            }
+        } finally {
+            if (loadingElement) loadingElement.style.display = 'none';
+        }
+    }
+    
+    // 渲染 Task 数据
+    function renderTaskData(data, viewerElementId) {
+        const element = document.getElementById(viewerElementId);
+        if (!element) return;
+        
+        if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+            element.innerHTML = '<div style="color: var(--text-muted);">暂无数据</div>';
+            return;
+        }
+        
+        try {
+            // 如果是字符串形式的JSON，解析它
+            let parsedData = data;
+            if (typeof data === 'string') {
                 try {
-                    inputData = JSON.parse(inputData);
-                } catch (parseError) {
-                    console.log('Task input data is a string but not valid JSON, using as-is');
+                    parsedData = JSON.parse(data);
+                } catch (e) {
+                    // 不是有效JSON，保持原样
                 }
             }
             
             const viewer = new JSONViewer({clickableUrls: true});
-            const element = document.getElementById('task-input-{{ loop.index }}');
-            if (element) {
-                viewer.render(element, inputData);
-            }
+            viewer.render(element, parsedData);
         } catch (e) {
-            console.error('Failed to parse task input data:', e);
-            const element = document.getElementById('task-input-{{ loop.index }}');
-            if (element) {
-                element.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 数据解析失败</div>';
-            }
+            console.error('渲染 Task 数据失败:', e);
+            element.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 数据解析失败</div>';
         }
-    })();
-    {% endif %}
-
-    {% if task.output_data %}
-    (function() {
-        try {
-            let outputData = {{ task.output_data|tojson }};
-            
-            // 检查是否是字符串形式的JSON，如果是则解析它
-            if (typeof outputData === 'string') {
-                try {
-                    outputData = JSON.parse(outputData);
-                } catch (parseError) {
-                    console.log('Task output data is a string but not valid JSON, using as-is');
+    }
+    
+    // 为 Task 数据按钮添加事件监听
+    document.querySelectorAll('.task-data-btn').forEach(button => {
+        const collapseTarget = button.getAttribute('data-bs-target');
+        const collapseElement = document.querySelector(collapseTarget);
+        
+        if (collapseElement) {
+            collapseElement.addEventListener('show.bs.collapse', function() {
+                if (button.dataset.loaded === 'true') return;
+                
+                const taskId = button.dataset.taskId;
+                const dataType = button.dataset.dataType;
+                const viewerElement = this.querySelector('.json-viewer');
+                
+                if (viewerElement && taskId) {
+                    loadTaskData(taskId, dataType, viewerElement.id);
+                    button.dataset.loaded = 'true';
                 }
-            }
-            
-            const viewer = new JSONViewer({clickableUrls: true});
-            const element = document.getElementById('task-output-{{ loop.index }}');
-            if (element) {
-                viewer.render(element, outputData);
-            }
-        } catch (e) {
-            console.error('Failed to parse task output data:', e);
-            const element = document.getElementById('task-output-{{ loop.index }}');
-            if (element) {
-                element.innerHTML = '<div style="color: var(--danger-color);"><i class="bi bi-exclamation-triangle"></i> 数据解析失败</div>';
-            }
+            });
         }
-    })();
-    {% endif %}
-    {% endfor %}
+    });
 
     // 添加页面加载动画
     const sections = document.querySelectorAll('.animate-fade-in');

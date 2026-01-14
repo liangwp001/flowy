@@ -301,7 +301,10 @@ class FlowService:
 
     @staticmethod
     def get_flow_history_detail(history_id: int) -> Optional[Dict]:
-        """获取执行历史详情"""
+        """获取执行历史详情
+        
+        优化：TaskHistory 不加载 input_data/output_data，通过单独API按需加载
+        """
         session = get_session()
         try:
             history = session.query(FlowHistory).filter(
@@ -316,7 +319,21 @@ class FlowService:
                 Flow.id == history.flow_id
             ).first()
 
-            task_histories = session.query(TaskHistory).filter(
+            # 【优化】TaskHistory 只加载必要字段，排除压缩的 input_data/output_data
+            task_histories = session.query(TaskHistory).options(
+                load_only(
+                    TaskHistory.id,
+                    TaskHistory.flow_history_id,
+                    TaskHistory.name,
+                    TaskHistory.status,
+                    TaskHistory.created_at,
+                    TaskHistory.start_time,
+                    TaskHistory.end_time,
+                    TaskHistory.progress,
+                    TaskHistory.progress_message,
+                    TaskHistory.progress_updated_at
+                )
+            ).filter(
                 TaskHistory.flow_history_id == history_id
             ).order_by(asc(TaskHistory.created_at)).all()
 
@@ -353,16 +370,10 @@ class FlowService:
             except (ValueError, TypeError):
                 pass
 
+            # 【优化】task 的 input_data/output_data 设为空，通过API按需加载
             for task in task_histories:
-                try:
-                    task.input_data = json.safe_loads(task.input_data or '{}')
-                except (ValueError, TypeError):
-                    task.input_data = {}
-
-                try:
-                    task.output_data = json.safe_loads(task.output_data or '{}')
-                except (ValueError, TypeError):
-                    task.output_data = {}
+                task.input_data = {}
+                task.output_data = {}
 
             return {
                 'flow_history': history,
@@ -439,10 +450,26 @@ class FlowService:
 
     @staticmethod
     def get_task_histories(history_id: int) -> List[TaskHistory]:
-        """获取执行历史的任务列表"""
+        """获取执行历史的任务列表
+        
+        优化：不加载 input_data/output_data 压缩字段
+        """
         session = get_session()
         try:
-            task_histories = session.query(TaskHistory).filter(
+            task_histories = session.query(TaskHistory).options(
+                load_only(
+                    TaskHistory.id,
+                    TaskHistory.flow_history_id,
+                    TaskHistory.name,
+                    TaskHistory.status,
+                    TaskHistory.created_at,
+                    TaskHistory.start_time,
+                    TaskHistory.end_time,
+                    TaskHistory.progress,
+                    TaskHistory.progress_message,
+                    TaskHistory.progress_updated_at
+                )
+            ).filter(
                 TaskHistory.flow_history_id == history_id
             ).order_by(asc(TaskHistory.created_at)).all()
 

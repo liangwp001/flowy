@@ -255,6 +255,22 @@ def api_get_history_output(history_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@api_bp.route('/task/<int:task_id>/data', methods=['GET'])
+def api_get_task_data(task_id):
+    """获取任务的输入输出数据API（用于详情页按需加载）"""
+    try:
+        task_data = FlowService.get_task_data(task_id)
+        if task_data is None:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'data': task_data
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/history/batch-delete', methods=['POST'])
 def api_batch_delete_history():
     """批量删除执行历史API"""
