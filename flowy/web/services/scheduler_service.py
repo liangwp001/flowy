@@ -16,6 +16,7 @@ from apscheduler.triggers.date import DateTrigger
 from flowy.core.db import get_session, Trigger, FlowHistory, TaskHistory
 from flowy.core.flow import execute_flow
 from flowy.core.json_utils import json
+from sqlalchemy.orm import load_only
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,11 @@ class SchedulerService:
             cls._scheduler_started = True
             logger.info("调度器已启动")
 
-            # 添加孤儿任务检查定时任务（每30秒执行一次）
-            cls.add_orphaned_job_checker()
+            # 添加孤儿任务检查定时任务（每5分钟执行一次，减少数据库压力）
+            cls.add_orphaned_job_checker(interval_seconds=300)
 
-            # 添加触发器同步定时任务（每60秒执行一次）
-            cls.add_trigger_syncer()
+            # 添加触发器同步定时任务（每5分钟执行一次）
+            cls.add_trigger_syncer(interval_seconds=300)
 
             # 添加历史数据清理定时任务（每天0点执行，需配置启用）
             cls.add_history_cleanup_job()
@@ -749,7 +750,16 @@ class SchedulerService:
         try:
             offset = 0
             while True:
-                pending_batch = session.query(FlowHistory).filter(
+                # 【优化】使用 load_only 排除压缩字段，避免不必要的解压缩
+                pending_batch = session.query(FlowHistory).options(
+                    load_only(
+                        FlowHistory.id,
+                        FlowHistory.flow_id,
+                        FlowHistory.status,
+                        FlowHistory.created_at,
+                        FlowHistory.end_time
+                    )
+                ).filter(
                     FlowHistory.status == 'pending',
                     FlowHistory.created_at < (now - pending_timeout)
                 ).limit(batch_size).offset(offset).all()
@@ -766,13 +776,18 @@ class SchedulerService:
 
                     if task_lost:
                         logger.warning(f"FlowHistory {history.id} (flow={history.flow_id}) 任务丢失，标记为失败")
-                        history.status = 'failed'
-                        history.end_time = now
-                        history.output_data = json.dumps({
-                            'error': '任务丢失：调度器重启或任务超时',
-                            'original_status': 'pending',
-                            'detected_at': now.isoformat()
-                        })
+                        # 【优化】使用 update 语句直接更新，避免加载完整对象
+                        session.query(FlowHistory).filter(
+                            FlowHistory.id == history.id
+                        ).update({
+                            FlowHistory.status: 'failed',
+                            FlowHistory.end_time: now,
+                            FlowHistory.output_data: json.dumps({
+                                'error': '任务丢失：调度器重启或任务超时',
+                                'original_status': 'pending',
+                                'detected_at': now.isoformat()
+                            })
+                        }, synchronize_session=False)
 
                         # 更新关联的 running 状态的 TaskHistory
                         session.query(TaskHistory).filter(
@@ -796,7 +811,16 @@ class SchedulerService:
         try:
             offset = 0
             while True:
-                running_batch = session.query(FlowHistory).filter(
+                # 【优化】使用 load_only 排除压缩字段
+                running_batch = session.query(FlowHistory).options(
+                    load_only(
+                        FlowHistory.id,
+                        FlowHistory.flow_id,
+                        FlowHistory.status,
+                        FlowHistory.start_time,
+                        FlowHistory.end_time
+                    )
+                ).filter(
                     FlowHistory.status == 'running',
                     FlowHistory.start_time < (now - running_timeout)
                 ).limit(batch_size).offset(offset).all()
@@ -813,13 +837,18 @@ class SchedulerService:
 
                     if running_tasks_count == 0:
                         logger.warning(f"FlowHistory {history.id} 无运行中任务但状态为 running，标记为失败")
-                        history.status = 'failed'
-                        history.end_time = now
-                        history.output_data = json.dumps({
-                            'error': f'任务运行超时（超过 {running_timeout_hours} 小时）且无活动任务',
-                            'original_status': 'running',
-                            'detected_at': now.isoformat()
-                        })
+                        # 【优化】使用 update 语句直接更新
+                        session.query(FlowHistory).filter(
+                            FlowHistory.id == history.id
+                        ).update({
+                            FlowHistory.status: 'failed',
+                            FlowHistory.end_time: now,
+                            FlowHistory.output_data: json.dumps({
+                                'error': f'任务运行超时（超过 {running_timeout_hours} 小时）且无活动任务',
+                                'original_status': 'running',
+                                'detected_at': now.isoformat()
+                            })
+                        }, synchronize_session=False)
                         result['running_count'] += 1
 
                 session.commit()
@@ -836,7 +865,16 @@ class SchedulerService:
         try:
             offset = 0
             while True:
-                orphaned_batch = session.query(TaskHistory).filter(
+                # 【优化】使用 load_only 排除压缩字段
+                orphaned_batch = session.query(TaskHistory).options(
+                    load_only(
+                        TaskHistory.id,
+                        TaskHistory.flow_history_id,
+                        TaskHistory.status,
+                        TaskHistory.start_time,
+                        TaskHistory.end_time
+                    )
+                ).filter(
                     TaskHistory.status == 'running',
                     TaskHistory.start_time < (now - running_timeout)
                 ).limit(batch_size).offset(offset).all()
@@ -845,7 +883,10 @@ class SchedulerService:
                     break
 
                 for task in orphaned_batch:
-                    flow_history = session.query(FlowHistory).filter(
+                    # 【优化】只查询需要的字段
+                    flow_history = session.query(FlowHistory).options(
+                        load_only(FlowHistory.id, FlowHistory.status, FlowHistory.end_time)
+                    ).filter(
                         FlowHistory.id == task.flow_history_id
                     ).first()
 

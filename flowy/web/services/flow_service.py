@@ -7,6 +7,7 @@ from datetime import datetime
 
 from flowy.core.json_utils import json
 from sqlalchemy import func, desc, asc, and_
+from sqlalchemy.orm import load_only
 
 from flowy.core.db import Flow, FlowHistory, TaskHistory, get_session, get_running_tasks, get_flow_remarks
 
@@ -165,10 +166,25 @@ class FlowService:
     @staticmethod
     def get_flow_history_paginated(flow_id: str, page: int = 1, per_page: int = 30,
                                    status_filter: str = None) -> Tuple[List[FlowHistory], int]:
-        """获取Flow执行历史分页列表"""
+        """获取Flow执行历史分页列表
+        
+        优化：使用 load_only 排除压缩字段，避免不必要的磁盘读取和解压缩
+        """
         session = get_session()
         try:
-            query = session.query(FlowHistory).filter(FlowHistory.flow_id == flow_id)
+            # 【优化】只加载必要字段，完全跳过 input_data 和 output_data
+            # 这避免了 CompressedText 的自动解压缩，大幅减少内存和磁盘IO
+            query = session.query(FlowHistory).options(
+                load_only(
+                    FlowHistory.id,
+                    FlowHistory.flow_id,
+                    FlowHistory.flow_metadata,
+                    FlowHistory.status,
+                    FlowHistory.created_at,
+                    FlowHistory.start_time,
+                    FlowHistory.end_time
+                )
+            ).filter(FlowHistory.flow_id == flow_id)
 
             if status_filter:
                 query = query.filter(FlowHistory.status == status_filter)
@@ -182,21 +198,10 @@ class FlowService:
                 # 先从会话中分离对象，避免 autoflush 问题
                 session.expunge(history)
 
-                try:
-                    history.input_data = json.safe_loads(history.input_data or '{}')
-                except (ValueError, TypeError):
-                    history.input_data = {}
-
-                # 输出数据可能是双重编码的，需要尝试双重解析
-                try:
-                    parsed_output = json.safe_loads(history.output_data or '{}')
-                    # 如果解析后仍然是字符串，再解析一次
-                    if isinstance(parsed_output, str):
-                        history.output_data = json.safe_loads(parsed_output)
-                    else:
-                        history.output_data = parsed_output
-                except (ValueError, TypeError):
-                    history.output_data = {}
+                # 【优化】列表页不需要 input_data 和 output_data
+                # 由于使用了 load_only，这些字段未被加载，设置为空字典供模板使用
+                history.input_data = {}
+                history.output_data = {}
 
                 # 解析触发器信息和备注
                 history.trigger_name = None
