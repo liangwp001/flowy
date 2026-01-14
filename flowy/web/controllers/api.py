@@ -103,7 +103,8 @@ def api_get_flow_history(flow_id):
             'start_time': h.start_time.isoformat() if h.start_time else None,
             'end_time': h.end_time.isoformat() if h.end_time else None,
             'input_data': h.input_data,
-            'output_data': h.output_data,
+            # output_data 在列表API中不返回，需要完整数据请使用详情API
+            'has_output_data': bool(h.output_data),
             'flow_metadata': h.flow_metadata,
             'running_tasks': getattr(h, 'running_tasks', []),
             'remarks': getattr(h, 'remarks', []),

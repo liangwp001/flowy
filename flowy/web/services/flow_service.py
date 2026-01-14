@@ -168,12 +168,13 @@ class FlowService:
                                    status_filter: str = None) -> Tuple[List[FlowHistory], int]:
         """获取Flow执行历史分页列表
         
-        优化：使用 load_only 排除压缩字段，避免不必要的磁盘读取和解压缩
+        优化：使用 load_only 排除 output_data 压缩字段，避免不必要的磁盘读取和解压缩
+        注意：保留 input_data 用于"重新执行"功能
         """
         session = get_session()
         try:
-            # 【优化】只加载必要字段，完全跳过 input_data 和 output_data
-            # 这避免了 CompressedText 的自动解压缩，大幅减少内存和磁盘IO
+            # 【优化】只排除 output_data（通常比 input_data 大得多）
+            # 保留 input_data 用于列表页的"重新执行"功能
             query = session.query(FlowHistory).options(
                 load_only(
                     FlowHistory.id,
@@ -182,7 +183,8 @@ class FlowService:
                     FlowHistory.status,
                     FlowHistory.created_at,
                     FlowHistory.start_time,
-                    FlowHistory.end_time
+                    FlowHistory.end_time,
+                    FlowHistory.input_data  # 保留 input_data
                 )
             ).filter(FlowHistory.flow_id == flow_id)
 
@@ -198,9 +200,14 @@ class FlowService:
                 # 先从会话中分离对象，避免 autoflush 问题
                 session.expunge(history)
 
-                # 【优化】列表页不需要 input_data 和 output_data
-                # 由于使用了 load_only，这些字段未被加载，设置为空字典供模板使用
-                history.input_data = {}
+                # 解析 input_data（保留用于重新执行功能）
+                try:
+                    history.input_data = json.safe_loads(history.input_data or '{}')
+                except (ValueError, TypeError):
+                    history.input_data = {}
+
+                # 【优化】output_data 未加载，设置为空字典
+                # 列表页不需要显示输出数据，需要时请使用详情API
                 history.output_data = {}
 
                 # 解析触发器信息和备注
