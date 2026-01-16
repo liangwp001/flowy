@@ -5,5 +5,6 @@
 from flowy.web.controllers.flows import flows_bp
 from flowy.web.controllers.api import api_bp
 from flowy.web.controllers.triggers import triggers_bp
+from flowy.web.controllers.workers import workers_bp
 
-__all__ = ['flows_bp', 'api_bp', 'triggers_bp']
+__all__ = ['flows_bp', 'api_bp', 'triggers_bp', 'workers_bp']

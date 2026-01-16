@@ -25,7 +25,10 @@ class TriggerService:
         description: str,
         cron_expression: str,
         trigger_params: dict,
-        max_instances: int = 1
+        max_instances: int = 1,
+        target_tags: list = None,
+        target_worker: str = None,
+        priority: int = 50
     ) -> Trigger:
         """创建触发器
 
@@ -36,6 +39,9 @@ class TriggerService:
             cron_expression: Cron表达式
             trigger_params: 触发参数字典
             max_instances: 最大并发实例数，默认1
+            target_tags: 目标Worker标签列表（分布式执行）
+            target_worker: 指定Worker ID（分布式执行）
+            priority: 优先级 0-100，默认50（分布式执行）
 
         Returns:
             创建的触发器对象
@@ -60,6 +66,10 @@ class TriggerService:
             if max_instances < 1:
                 raise ValueError("max_instances 必须大于等于 1")
 
+            # 验证 priority
+            if priority < 0 or priority > 100:
+                raise ValueError("priority 必须在 0-100 之间")
+
             # 创建触发器
             trigger = Trigger(
                 flow_id=flow_id,
@@ -68,6 +78,9 @@ class TriggerService:
                 cron_expression=cron_expression,
                 trigger_params=json.dumps(trigger_params, ensure_ascii=False),
                 max_instances=max_instances,
+                target_tags=json.dumps(target_tags, ensure_ascii=False) if target_tags else None,
+                target_worker=target_worker if target_worker else None,
+                priority=priority,
                 enabled=1,
                 created_at=datetime.now(),
                 updated_at=datetime.now()
@@ -134,7 +147,10 @@ class TriggerService:
         description: str = None,
         cron_expression: str = None,
         trigger_params: dict = None,
-        max_instances: int = None
+        max_instances: int = None,
+        target_tags: list = None,
+        target_worker: str = None,
+        priority: int = None
     ) -> Trigger:
         """更新触发器
 
@@ -145,6 +161,9 @@ class TriggerService:
             cron_expression: 新的Cron表达式（可选）
             trigger_params: 新的触发参数（可选）
             max_instances: 新的最大实例数（可选）
+            target_tags: 新的目标Worker标签列表（可选）
+            target_worker: 新的指定Worker ID（可选）
+            priority: 新的优先级（可选）
 
         Returns:
             更新后的触发器对象
@@ -179,6 +198,16 @@ class TriggerService:
                 if max_instances < 1:
                     raise ValueError("max_instances 必须大于等于 1")
                 trigger.max_instances = max_instances
+            
+            # 分布式执行字段
+            if target_tags is not None:
+                trigger.target_tags = json.dumps(target_tags, ensure_ascii=False) if target_tags else None
+            if target_worker is not None:
+                trigger.target_worker = target_worker if target_worker else None
+            if priority is not None:
+                if priority < 0 or priority > 100:
+                    raise ValueError("priority 必须在 0-100 之间")
+                trigger.priority = priority
 
             trigger.updated_at = datetime.now()
             session.commit()

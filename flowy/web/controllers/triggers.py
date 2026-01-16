@@ -29,6 +29,13 @@ def trigger_to_dict(trigger):
         except Exception:
             trigger_params = {}
 
+    target_tags = []
+    if trigger.target_tags:
+        try:
+            target_tags = json.loads(trigger.target_tags)
+        except Exception:
+            target_tags = []
+
     return {
         'id': trigger.id,
         'flow_id': trigger.flow_id,
@@ -37,6 +44,9 @@ def trigger_to_dict(trigger):
         'cron_expression': trigger.cron_expression,
         'trigger_params': trigger_params,
         'max_instances': getattr(trigger, 'max_instances', 1) or 1,
+        'target_tags': target_tags,
+        'target_worker': trigger.target_worker,
+        'priority': getattr(trigger, 'priority', 50) or 50,
         'enabled': bool(trigger.enabled),
         'created_at': trigger.created_at.isoformat() if trigger.created_at else None,
         'updated_at': trigger.updated_at.isoformat() if trigger.updated_at else None
@@ -115,6 +125,16 @@ def api_create_trigger():
         if not isinstance(max_instances, int) or max_instances < 1:
             return jsonify({'success': False, 'error': 'max_instances 必须是大于等于 1 的整数'}), 400
 
+        # 验证 priority
+        priority = data.get('priority', 50)
+        if not isinstance(priority, int) or priority < 0 or priority > 100:
+            return jsonify({'success': False, 'error': 'priority 必须是 0-100 之间的整数'}), 400
+
+        # 验证 target_tags
+        target_tags = data.get('target_tags', [])
+        if target_tags and not isinstance(target_tags, list):
+            return jsonify({'success': False, 'error': 'target_tags 必须是数组'}), 400
+
         # 创建触发器
         trigger = TriggerService.create_trigger(
             flow_id=data['flow_id'],
@@ -122,7 +142,10 @@ def api_create_trigger():
             description=data.get('description', ''),
             cron_expression=data['cron_expression'],
             trigger_params=data.get('trigger_params', {}),
-            max_instances=max_instances
+            max_instances=max_instances,
+            target_tags=target_tags if target_tags else None,
+            target_worker=data.get('target_worker', ''),
+            priority=priority
         )
 
         return jsonify({
@@ -160,6 +183,17 @@ def api_update_trigger(trigger_id):
             if not isinstance(max_instances, int) or max_instances < 1:
                 return jsonify({'success': False, 'error': 'max_instances 必须是大于等于 1 的整数'}), 400
 
+        # 验证 priority
+        priority = data.get('priority')
+        if priority is not None:
+            if not isinstance(priority, int) or priority < 0 or priority > 100:
+                return jsonify({'success': False, 'error': 'priority 必须是 0-100 之间的整数'}), 400
+
+        # 验证 target_tags
+        target_tags = data.get('target_tags')
+        if target_tags is not None and target_tags and not isinstance(target_tags, list):
+            return jsonify({'success': False, 'error': 'target_tags 必须是数组'}), 400
+
         # 更新触发器
         trigger = TriggerService.update_trigger(
             trigger_id=trigger_id,
@@ -167,7 +201,10 @@ def api_update_trigger(trigger_id):
             description=data.get('description'),
             cron_expression=data.get('cron_expression'),
             trigger_params=data.get('trigger_params'),
-            max_instances=max_instances
+            max_instances=max_instances,
+            target_tags=target_tags,
+            target_worker=data.get('target_worker'),
+            priority=priority
         )
 
         return jsonify({

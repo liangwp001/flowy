@@ -417,6 +417,57 @@
                         </div>
                         <div class="invalid-feedback">请输入大于等于 1 的整数</div>
                     </div>
+
+                    <!-- 分布式执行配置 -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light py-2">
+                            <h6 class="mb-0">
+                                <i class="bi bi-hdd-network"></i> 分布式执行配置
+                                <small class="text-muted">(可选)</small>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- 目标Worker标签 -->
+                            <div class="mb-3">
+                                <label for="triggerTargetTags" class="form-label">
+                                    <i class="bi bi-tags"></i> 目标Worker标签
+                                </label>
+                                <input type="text" class="form-control" id="triggerTargetTags"
+                                       placeholder="例如: gpu, high-memory (多个标签用逗号分隔)">
+                                <div class="form-text">
+                                    指定任务应该路由到哪些Worker执行。留空表示本地执行或任意Worker。
+                                </div>
+                            </div>
+
+                            <!-- 指定Worker -->
+                            <div class="mb-3">
+                                <label for="triggerTargetWorker" class="form-label">
+                                    <i class="bi bi-hdd"></i> 指定Worker ID
+                                </label>
+                                <input type="text" class="form-control" id="triggerTargetWorker"
+                                       placeholder="例如: worker-server1-1234-abcd1234">
+                                <div class="form-text">
+                                    直接指定执行任务的Worker。如果同时设置了标签，优先使用指定Worker。
+                                </div>
+                            </div>
+
+                            <!-- 优先级 -->
+                            <div class="mb-0">
+                                <label for="triggerPriority" class="form-label">
+                                    <i class="bi bi-sort-numeric-up"></i> 优先级
+                                </label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="triggerPriority"
+                                           min="0" max="100" value="50" placeholder="0-100">
+                                    <span class="input-group-text">/ 100</span>
+                                </div>
+                                <div class="form-text">
+                                    任务优先级，0-100，数值越大优先级越高。默认为 50。
+                                </div>
+                                <div class="invalid-feedback">请输入 0-100 之间的整数</div>
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -579,6 +630,9 @@ function createTrigger(flowId) {
     document.getElementById('editTriggerId').value = '';
     document.getElementById('triggerModalTitleText').textContent = '创建触发器';
     document.getElementById('triggerMaxInstances').value = '1';  // 默认值为 1
+    document.getElementById('triggerTargetTags').value = '';
+    document.getElementById('triggerTargetWorker').value = '';
+    document.getElementById('triggerPriority').value = '50';  // 默认优先级
 
     // 移除验证状态
     document.getElementById('createTriggerForm').classList.remove('was-validated');
@@ -618,6 +672,12 @@ function editTriggerFromList(triggerId) {
                 document.getElementById('triggerDescription').value = trigger.description || '';
                 document.getElementById('triggerCron').value = trigger.cron_expression;
                 document.getElementById('triggerMaxInstances').value = trigger.max_instances || 1;
+
+                // 分布式执行字段
+                const targetTags = trigger.target_tags || [];
+                document.getElementById('triggerTargetTags').value = targetTags.join(', ');
+                document.getElementById('triggerTargetWorker').value = trigger.target_worker || '';
+                document.getElementById('triggerPriority').value = trigger.priority || 50;
 
                 // 格式化JSON参数
                 if (trigger.trigger_params) {

@@ -69,6 +69,9 @@ class SchedulerService:
             # 添加历史数据清理定时任务（每天0点执行，需配置启用）
             cls.add_history_cleanup_job()
 
+            # 在分布式模式下添加健康检查定时任务
+            cls.add_health_check_job()
+
     @classmethod
     def add_orphaned_job_checker(cls, interval_seconds: int = 30):
         """添加孤儿任务检查定时任务
@@ -256,6 +259,72 @@ class SchedulerService:
 
         days = retention_days or get_config().history_retention_days
         logger.info(f"添加历史数据清理定时任务，每天0点执行，保留{days}天数据")
+
+    @classmethod
+    def add_health_check_job(cls, interval_seconds: int = 30):
+        """添加健康检查定时任务（分布式模式专用）
+        
+        在 Master 模式下定期执行：
+        1. Worker 健康检查：检测心跳超时的 Worker 并标记为 offline
+        2. 超时任务检查：处理 claimed/running 超时的任务
+        
+        Args:
+            interval_seconds: 检查间隔时间（秒），默认30秒
+        """
+        from flowy.core.config import get_config
+        
+        if cls._scheduler is None:
+            return
+        
+        config = get_config()
+        
+        # 只在 master 模式下启用健康检查
+        if config.mode != 'master':
+            logger.debug("非 master 模式，跳过添加健康检查定时任务")
+            return
+        
+        job_id = 'distributed_health_check'
+        
+        # 如果任务已存在，先移除
+        if cls._scheduler.get_job(job_id):
+            cls._scheduler.remove_job(job_id)
+        
+        cls._scheduler.add_job(
+            func=cls._run_health_checks,
+            trigger='interval',
+            seconds=interval_seconds,
+            id=job_id,
+            name='分布式健康检查器',
+            replace_existing=True
+        )
+        logger.info(f"添加分布式健康检查定时任务，间隔: {interval_seconds}秒")
+
+    @classmethod
+    def _run_health_checks(cls):
+        """执行所有健康检查
+        
+        包括：
+        1. Worker 健康检查
+        2. 超时任务检查
+        """
+        try:
+            # 1. 检查 Worker 健康状态
+            worker_result = cls.check_worker_health()
+            
+            # 2. 检查超时任务
+            task_result = cls.check_stale_tasks()
+            
+            # 只在有变化时记录日志
+            if (worker_result.get('workers_marked_offline', 0) > 0 or 
+                task_result.get('claimed_reset', 0) > 0 or 
+                task_result.get('running_failed', 0) > 0):
+                logger.info(
+                    f"健康检查完成: Worker离线={worker_result.get('workers_marked_offline', 0)}, "
+                    f"任务重置={task_result.get('claimed_reset', 0)}, "
+                    f"任务失败={task_result.get('running_failed', 0)}"
+                )
+        except Exception as e:
+            logger.error(f"执行健康检查时发生错误: {e}")
     
     @classmethod
     def shutdown_scheduler(cls):
@@ -692,7 +761,7 @@ class SchedulerService:
 
     @classmethod
     def execute_trigger(cls, trigger_id: int):
-        """执行触发器
+        """执行触发器（支持分布式执行）
 
         Args:
             trigger_id: 触发器ID
@@ -715,25 +784,251 @@ class SchedulerService:
                 except Exception as e:
                     logger.error(f"解析触发参数失败 {trigger_id}: {e}")
 
-            # 构建元数据
-            metadata = {
-                'trigger_id': trigger_id,
-                'trigger_name': trigger.name,
-                'trigger_type': 'scheduled'
-            }
-
             logger.info(f"执行触发器 {trigger_id}: {trigger.name}")
 
-            # 执行工作流
-            execute_flow(
-                flow_id=trigger.flow_id,
-                input_data=trigger_params,
-                metadata=metadata
-            )
+            # 判断是否本地执行
+            if cls._should_execute_locally(trigger):
+                # 本地执行：使用原有逻辑
+                metadata = {
+                    'trigger_id': trigger_id,
+                    'trigger_name': trigger.name,
+                    'trigger_type': 'scheduled'
+                }
+                execute_flow(
+                    flow_id=trigger.flow_id,
+                    input_data=trigger_params,
+                    metadata=metadata
+                )
+            else:
+                # 分布式执行：创建 FlowHistory 记录，等待 Worker 认领
+                flow_history = FlowHistory(
+                    flow_id=trigger.flow_id,
+                    status='queued',
+                    target_tags=trigger.target_tags,
+                    target_worker=trigger.target_worker,
+                    priority=trigger.priority or 50,
+                    input_data=json.dumps(trigger_params),
+                    created_at=datetime.now(),
+                    flow_metadata=json.dumps({
+                        'trigger_id': trigger_id,
+                        'trigger_name': trigger.name,
+                        'trigger_type': 'scheduled'
+                    })
+                )
+                session.add(flow_history)
+                session.commit()
+                logger.info(
+                    f"任务已入队等待 Worker 认领: flow_history_id={flow_history.id}, "
+                    f"target_tags={trigger.target_tags}, target_worker={trigger.target_worker}, "
+                    f"priority={trigger.priority or 50}"
+                )
         except Exception as e:
             logger.error(f"执行触发器失败 {trigger_id}: {e}")
         finally:
             session.close()
+
+    @classmethod
+    def _should_execute_locally(cls, trigger: Trigger) -> bool:
+        """判断是否应该本地执行
+        
+        根据配置和触发器设置判断任务是否应该在本地执行。
+        
+        Args:
+            trigger: 触发器对象
+            
+        Returns:
+            True 表示本地执行，False 表示入队等待 Worker 认领
+        """
+        from flowy.core.config import get_config
+        
+        config = get_config()
+        
+        # 单机模式总是本地执行
+        if config.mode == 'standalone':
+            return True
+        
+        # 没有指定目标标签和目标 Worker，本地执行
+        if not trigger.target_tags and not trigger.target_worker:
+            return True
+        
+        # 目标包含 "local" 标签时本地执行
+        if trigger.target_tags:
+            try:
+                tags = json.loads(trigger.target_tags)
+                if isinstance(tags, list) and 'local' in tags:
+                    return True
+            except (json.JSONDecodeError, TypeError):
+                # 解析失败，默认本地执行
+                logger.warning(f"触发器 {trigger.id} 的 target_tags 解析失败，默认本地执行")
+                return True
+        
+        # 其他情况入队等待 Worker 认领
+        return False
+
+    @classmethod
+    def check_stale_tasks(cls):
+        """检查超时任务（分布式执行专用）
+        
+        检查 claimed 和 running 状态的任务是否超时：
+        - claimed 超时且 Worker 离线：重置为 queued 状态
+        - running 超时且 Worker 离线：标记为 failed 状态
+        
+        注意：不会自动重试 running 超时的任务，因为可能有副作用。
+        
+        Returns:
+            dict: 包含处理结果的统计信息
+        """
+        from flowy.core.config import get_config
+        from flowy.core.db import Worker
+        
+        config = get_config()
+        session = get_session()
+        now = datetime.now()
+        
+        result = {
+            'claimed_reset': 0,
+            'running_failed': 0,
+            'errors': []
+        }
+        
+        try:
+            # 1. 检查 claimed 超时的任务
+            claim_timeout = timedelta(seconds=config.task_claim_timeout)
+            stale_claimed = session.query(FlowHistory).filter(
+                FlowHistory.status == 'claimed',
+                FlowHistory.claimed_at < (now - claim_timeout)
+            ).all()
+            
+            for task in stale_claimed:
+                # 检查认领该任务的 Worker 状态
+                worker = None
+                if task.claimed_by:
+                    worker = session.query(Worker).filter(
+                        Worker.id == task.claimed_by
+                    ).first()
+                
+                # 如果 Worker 不存在或已离线，重置任务为 queued
+                if not worker or worker.status == 'offline':
+                    logger.warning(
+                        f"任务 {task.id} claimed 超时 (Worker: {task.claimed_by}, "
+                        f"状态: {worker.status if worker else '不存在'})，重置为 queued"
+                    )
+                    task.status = 'queued'
+                    task.claimed_by = None
+                    task.claimed_at = None
+                    result['claimed_reset'] += 1
+            
+            # 2. 检查 running 超时的任务
+            running_timeout = timedelta(seconds=config.task_running_timeout)
+            stale_running = session.query(FlowHistory).filter(
+                FlowHistory.status == 'running',
+                FlowHistory.claimed_at < (now - running_timeout)
+            ).all()
+            
+            for task in stale_running:
+                # 检查执行该任务的 Worker 状态
+                worker = None
+                if task.claimed_by:
+                    worker = session.query(Worker).filter(
+                        Worker.id == task.claimed_by
+                    ).first()
+                
+                # 如果 Worker 不存在或已离线，标记任务为 failed
+                # 注意：不自动重试，因为可能有副作用
+                if not worker or worker.status == 'offline':
+                    logger.warning(
+                        f"任务 {task.id} running 超时 (Worker: {task.claimed_by}, "
+                        f"状态: {worker.status if worker else '不存在'})，标记为 failed"
+                    )
+                    task.status = 'failed'
+                    task.end_time = now
+                    task.output_data = json.dumps({
+                        'error': f'Worker {task.claimed_by} 超时或离线',
+                        'original_status': 'running',
+                        'timeout_type': 'running_timeout',
+                        'detected_at': now.isoformat()
+                    })
+                    result['running_failed'] += 1
+            
+            session.commit()
+            
+            # 记录处理结果
+            if result['claimed_reset'] > 0 or result['running_failed'] > 0:
+                logger.info(
+                    f"超时任务检查完成: claimed 重置={result['claimed_reset']}, "
+                    f"running 失败={result['running_failed']}"
+                )
+            
+        except Exception as e:
+            session.rollback()
+            error_msg = f"检查超时任务时发生错误: {e}"
+            logger.error(error_msg)
+            result['errors'].append(error_msg)
+        finally:
+            session.close()
+        
+        return result
+
+    @classmethod
+    def check_worker_health(cls):
+        """检查 Worker 健康状态
+        
+        检查所有 online 或 draining 状态的 Worker，如果心跳超时则标记为 offline。
+        
+        Returns:
+            dict: 包含处理结果的统计信息
+        """
+        from flowy.core.config import get_config
+        from flowy.core.db import Worker
+        
+        config = get_config()
+        session = get_session()
+        now = datetime.now()
+        
+        result = {
+            'workers_checked': 0,
+            'workers_marked_offline': 0,
+            'errors': []
+        }
+        
+        try:
+            timeout = timedelta(seconds=config.worker_heartbeat_timeout)
+            
+            # 查找心跳超时的 Worker
+            stale_workers = session.query(Worker).filter(
+                Worker.status.in_(['online', 'draining']),
+                Worker.last_heartbeat < (now - timeout)
+            ).all()
+            
+            result['workers_checked'] = len(stale_workers)
+            
+            for worker in stale_workers:
+                logger.warning(
+                    f"Worker {worker.id} 心跳超时 "
+                    f"(最后心跳: {worker.last_heartbeat}, 超时阈值: {config.worker_heartbeat_timeout}s)，"
+                    f"标记为 offline"
+                )
+                worker.status = 'offline'
+                result['workers_marked_offline'] += 1
+            
+            session.commit()
+            
+            # 记录处理结果
+            if result['workers_marked_offline'] > 0:
+                logger.info(
+                    f"Worker 健康检查完成: 检查={result['workers_checked']}, "
+                    f"标记离线={result['workers_marked_offline']}"
+                )
+            
+        except Exception as e:
+            session.rollback()
+            error_msg = f"检查 Worker 健康状态时发生错误: {e}"
+            logger.error(error_msg)
+            result['errors'].append(error_msg)
+        finally:
+            session.close()
+        
+        return result
 
     @classmethod
     def check_orphaned_jobs(cls, pending_timeout_minutes: int = 5, running_timeout_hours: int = 24):

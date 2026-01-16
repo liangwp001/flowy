@@ -37,6 +37,19 @@ class CompressedText(TypeDecorator):
         return zlib.decompress(value).decode('utf-8')
 
 
+class Worker(Base):
+    """Worker 节点模型，用于分布式执行"""
+    __tablename__ = 'worker'
+
+    id = Column(String(64), primary_key=True)  # worker-{hostname}-{pid}-{uuid8}
+    hostname = Column(String(128), nullable=False)
+    tags = Column(Text)  # JSON 数组，Worker 能力标签
+    status = Column(String(16), default='online')  # online / offline / draining
+    last_heartbeat = Column(DateTime)
+    registered_at = Column(DateTime)
+    worker_metadata = Column(Text)  # 扩展信息 JSON（避免与 SQLAlchemy 保留字冲突）
+
+
 class Trigger(Base):
     __tablename__ = 'trigger'
     id = Column(INTEGER, primary_key=True, autoincrement=True)
@@ -49,6 +62,10 @@ class Trigger(Base):
     enabled = Column(INTEGER, default=1)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
+    # 分布式执行字段（nullable 以保持向后兼容）
+    target_tags = Column(Text)  # JSON 数组，目标 Worker 标签
+    target_worker = Column(String(64))  # 指定 Worker ID
+    priority = Column(INTEGER, default=50)  # 优先级 0-100，默认 50
 
 
 class Flow(Base):
@@ -70,7 +87,13 @@ class FlowHistory(HistoryBase):
     end_time = Column(DateTime)
     input_data = Column(CompressedText)
     output_data = Column(CompressedText)
-    status = Column(String(64))
+    status = Column(String(64))  # pending, queued, claimed, running, completed, failed
+    # 分布式执行字段（nullable 以保持向后兼容）
+    target_tags = Column(Text)  # 目标标签（从 Trigger 复制）
+    target_worker = Column(String(64))  # 指定 Worker
+    priority = Column(INTEGER, default=50)  # 优先级
+    claimed_by = Column(String(64))  # 认领的 Worker ID
+    claimed_at = Column(DateTime)  # 认领时间
 
 
 class TaskHistory(HistoryBase):
@@ -140,6 +163,7 @@ def _get_session_maker():
         _DBSession.configure(binds={
             Flow: _get_engine(),
             Trigger: _get_engine(),
+            Worker: _get_engine(),
             FlowHistory: _get_history_engine(),
             TaskHistory: _get_history_engine()
         })

@@ -84,6 +84,12 @@
                             <i class="bi bi-clock-history"></i> 执行历史
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'workers.workers_page' %}active{% endif %}"
+                           href="{{ url_for('workers.workers_page') }}">
+                            <i class="bi bi-hdd-stack"></i> Workers
+                        </a>
+                    </li>
                 </ul>
 
                 <ul class="navbar-nav">

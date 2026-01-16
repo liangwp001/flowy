@@ -180,10 +180,11 @@ def create_app():
         return render_template('errors/500.html'), 500
 
     # 注册蓝图
-    from flowy.web.controllers import flows_bp, api_bp, triggers_bp
+    from flowy.web.controllers import flows_bp, api_bp, triggers_bp, workers_bp
     app.register_blueprint(flows_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(triggers_bp)
+    app.register_blueprint(workers_bp)  # Workers API already has /api/workers prefix
 
     # 主页重定向
     @app.route('/')
