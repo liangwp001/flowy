@@ -95,21 +95,20 @@ def api_get_flow_history(flow_id):
             status_filter=status_filter if status_filter else None
         )
 
-        histories_data = [{
-            'id': h.id,
-            'flow_id': h.flow_id,
-            'status': h.status,
-            'created_at': h.created_at.isoformat() if h.created_at else None,
-            'start_time': h.start_time.isoformat() if h.start_time else None,
-            'end_time': h.end_time.isoformat() if h.end_time else None,
-            'input_data': h.input_data,
-            # output_data 在列表API中不返回，需要完整数据请使用详情API
-            'has_output_data': bool(h.output_data),
-            'flow_metadata': h.flow_metadata,
-            'running_tasks': getattr(h, 'running_tasks', []),
-            'remarks': getattr(h, 'remarks', []),
-            'remark_level': getattr(h, 'remark_level', None)
-        } for h in histories]
+        histories_data = []
+        for h in histories:
+            histories_data.append({
+                'id': h.id,
+                'flow_id': h.flow_id,
+                'status': h.status,
+                'created_at': h.created_at.isoformat() if h.created_at else None,
+                'start_time': h.start_time.isoformat() if h.start_time else None,
+                'end_time': h.end_time.isoformat() if h.end_time else None,
+                'flow_metadata': h.flow_metadata,
+                'running_tasks': getattr(h, 'running_tasks', []),
+                'remarks': getattr(h, 'remarks', []),
+                'remark_level': getattr(h, 'remark_level', None)
+            })
 
         return jsonify({
             'success': True,
@@ -249,6 +248,24 @@ def api_get_history_output(history_id):
             'success': True,
             'data': {
                 'output_data': output_data
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/history/<int:history_id>/input', methods=['GET'])
+def api_get_history_input(history_id):
+    """获取执行历史的输入数据API（用于列表页预览）"""
+    try:
+        input_data = FlowService.get_flow_history_input(history_id)
+        if input_data is None:
+            return jsonify({'success': False, 'error': 'History not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'input_data': input_data
             }
         })
     except Exception as e:

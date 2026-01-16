@@ -99,6 +99,9 @@
 // 为 body 添加 class，防止双滚动条
 document.body.classList.add('all-history-page');
 
+// localStorage key
+const SELECTED_FLOW_STORAGE_KEY = 'flowy_all_history_selected_flow';
+
 // 当前选中的Flow ID
 let currentFlowId = '{{ current_flow_id or '' }}';
 // 侧边栏折叠状态
@@ -139,6 +142,18 @@ function restoreSidebarState() {
     }
 }
 
+// 恢复选中的 Flow
+function restoreSelectedFlow() {
+    const savedFlowId = localStorage.getItem(SELECTED_FLOW_STORAGE_KEY);
+    if (savedFlowId && savedFlowId !== currentFlowId) {
+        // 检查该 Flow 是否存在于列表中
+        const flowItem = document.querySelector(`.flow-item[data-flow-id="${savedFlowId}"]`);
+        if (flowItem) {
+            selectFlow(savedFlowId);
+        }
+    }
+}
+
 // 选择Flow - 更新iframe的src
 function selectFlow(flowId) {
     if (flowId === currentFlowId) return;
@@ -170,6 +185,9 @@ function selectFlow(flowId) {
     if (iframe) {
         iframe.src = `/flows/${flowId}/history?in_sidebar=1`;
         currentFlowId = flowId;
+        
+        // 保存选中状态到 localStorage
+        localStorage.setItem(SELECTED_FLOW_STORAGE_KEY, flowId);
     }
 }
 
@@ -177,6 +195,9 @@ function selectFlow(flowId) {
 document.addEventListener('DOMContentLoaded', function() {
     // 恢复侧边栏状态
     restoreSidebarState();
+    
+    // 恢复选中的 Flow
+    restoreSelectedFlow();
 
     // 折叠按钮点击事件
     const toggleBtn = document.getElementById('sidebarToggle');

@@ -11,6 +11,7 @@ from flowy.core.json_utils import json
 from flowy.core.context import flow_history_id_var
 from flowy.core.db import init_database, get_session, create_flow_history, update_flow_history, register_flow, FlowHistory
 from flowy.core.logger import get_flow_logger, cleanup_flow_logger
+from flowy.core.payload import save_flow_payload
 
 # 初始化数据库
 init_database()
@@ -96,6 +97,8 @@ def flow(flow_id, name=None, desc=None):
             session = get_session()
             flow_history_id = None
             logger = get_flow_logger()
+            
+            # 序列化输入数据
             try:
                 input_json = json.dumps(input_data)
             except Exception as serialize_error:
@@ -118,21 +121,23 @@ def flow(flow_id, name=None, desc=None):
                     history = session.query(FlowHistory).filter(FlowHistory.id == flow_history_id).first()
                     history.status = 'running'
                     history.start_time = start_time
-                    history.input_data = input_json
                     history.flow_metadata = metadata_json
                     session.commit()
+                    # 保存输入数据到 payload 库
+                    save_flow_payload(history_id=flow_history_id, input_data=input_json)
                 else:
                     # 如果没有历史记录ID，创建新的
                     history = create_flow_history(
                         session=session,
                         created_at=created_at,
                         start_time=start_time,
-                        input_data=input_json,
                         status='running',
                         flow_id=flow_id,
                     )
                     session.commit()
                     flow_history_id = history.id
+                    # 保存输入数据到 payload 库
+                    save_flow_payload(history_id=flow_history_id, input_data=input_json)
 
 
             except Exception as e:
@@ -165,20 +170,18 @@ def flow(flow_id, name=None, desc=None):
                         end_time = datetime.now()
 
                         if error_msg:
-                            # 如果有执行错误，记录错误信息
                             output_data = {
                                 'error': error_msg,
                                 'traceback': traceback.format_exc()
                             }
                             status = 'failed'
                         else:
-                            # 尝试序列化正常结果
                             output_data = {
                                 'result': result,
                             }
                             status = 'completed'
 
-                        # 最终序列化输出数据
+                        # 序列化输出数据
                         try:
                             output_data_json = json.dumps(output_data)
                         except Exception as final_serialize_error:
@@ -188,16 +191,17 @@ def flow(flow_id, name=None, desc=None):
                                 'final_error': str(final_serialize_error)
                             })
 
-                        # 更新flow历史
+                        # 更新 flow 历史状态
                         try:
                             update_flow_history(
                                 session=session,
                                 history_id=flow_history_id,
                                 end_time=end_time,
-                                output_data=output_data_json,
                                 status=status
                             )
                             session.commit()
+                            # 保存输出数据到 payload 库
+                            save_flow_payload(history_id=flow_history_id, output_data=output_data_json)
                         except Exception as db_error:
                             session.rollback()
                             logger.error(f"更新flow历史失败: {db_error}")

@@ -12,6 +12,7 @@ from flowy.core.context import get_flow_history_id
 from flowy.core.db import get_session, create_task_history, update_task_history, update_task_progress
 from flowy.core.logger import get_flow_logger
 from flowy.core.progress import set_task_history_id
+from flowy.core.payload import save_task_payload
 
 
 def task(name=None, desc=None):
@@ -42,7 +43,7 @@ def task(name=None, desc=None):
             if flow_history_id:
                 session = get_session()
                 try:
-                    # 安全序列化输入数据
+                    # 序列化输入数据
                     try:
                         input_json = json.dumps(input_data)
                     except Exception as serialize_error:
@@ -58,11 +59,14 @@ def task(name=None, desc=None):
                         name=task_name,
                         created_at=datetime.now(),
                         start_time=datetime.now(),
-                        input_data=input_json,
                         status='running'
                     )
                     session.commit()
                     task_history_id = task_history.id
+                    
+                    # 保存输入数据到 payload 库
+                    save_task_payload(task_id=task_history_id, input_data=input_json)
+                    
                     # 设置任务ID到上下文，供 set_progress 使用
                     set_task_history_id(task_history_id)
                     # 自动设置初始进度为 0
@@ -99,25 +103,22 @@ def task(name=None, desc=None):
                     session = get_session()
                     try:
                         if error_msg:
-                            # 如果有执行错误，记录错误信息
                             output_data = {
                                 'error': error_msg,
                                 'traceback': traceback.format_exc()
                             }
                             status = 'failed'
                         else:
-                            # 尝试序列化正常结果
                             output_data = {
                                 'result': result,
                             }
                             status = 'completed'
 
-                        # 最终序列化输出数据
+                        # 序列化输出数据
                         try:
                             output_data_json = json.dumps(output_data)
                         except Exception as serialize_error:
                             logger.warning(f"任务输出数据序列化失败: {serialize_error}")
-                            # 创建错误信息对象
                             error_output = {
                                 'error': '输出数据无法序列化',
                                 'serialize_error': str(serialize_error),
@@ -135,13 +136,12 @@ def task(name=None, desc=None):
                             if not error_msg:
                                 status = 'completed_with_serialization_error'
 
-                        # 更新任务历史
+                        # 更新任务历史状态
                         try:
                             update_task_history(
                                 session=session,
                                 task_id=task_history_id,
                                 end_time=end_time,
-                                output_data=output_data_json,
                                 status=status
                             )
                             # 任务成功完成时，自动设置进度为 100
@@ -153,6 +153,8 @@ def task(name=None, desc=None):
                                     progress_message='执行完成'
                                 )
                             session.commit()
+                            # 保存输出数据到 payload 库
+                            save_task_payload(task_id=task_history_id, output_data=output_data_json)
                         except Exception as db_error:
                             session.rollback()
                             logger.error(f"更新任务历史失败: {db_error}")

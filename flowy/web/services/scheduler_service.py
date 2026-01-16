@@ -16,7 +16,7 @@ from apscheduler.triggers.date import DateTrigger
 from flowy.core.db import get_session, Trigger, FlowHistory, TaskHistory
 from flowy.core.flow import execute_flow
 from flowy.core.json_utils import json
-from sqlalchemy.orm import load_only
+from flowy.core.payload import save_flow_payload
 
 logger = logging.getLogger(__name__)
 
@@ -533,13 +533,16 @@ class SchedulerService:
             flow_history = FlowHistory(
                 flow_id=flow_id,
                 status='pending',
-                input_data=json.dumps(input_data or {}),
                 created_at=datetime.now()
             )
             session.add(flow_history)
             session.commit()
             flow_history_id = flow_history.id
             logger.info(f"创建FlowHistory记录: {flow_history_id}")
+            
+            # 保存输入数据到 payload 库
+            if input_data:
+                save_flow_payload(history_id=flow_history_id, input_data=json.dumps(input_data))
         except Exception as e:
             session.rollback()
             logger.error(f"创建FlowHistory失败: {e}")
@@ -596,18 +599,8 @@ class SchedulerService:
             # 更新历史记录状态为完成
             if flow_history_id and result.get('success'):
                 cls.update_flow_history_status(flow_history_id, 'completed', None)
-                # 更新输出数据
-                session = get_session()
-                try:
-                    history = session.query(FlowHistory).filter(FlowHistory.id == flow_history_id).first()
-                    if history:
-                        history.output_data = json.dumps(result)
-                        session.commit()
-                except Exception as e:
-                    session.rollback()
-                    logger.error(f"更新输出数据失败: {e}")
-                finally:
-                    session.close()
+                # 保存输出数据到 payload 库
+                save_flow_payload(history_id=flow_history_id, output_data=json.dumps(result))
         except Exception as e:
             logger.error(f"执行即时任务失败 {flow_id}: {e}")
             # 更新历史记录状态为失败
@@ -633,8 +626,8 @@ class SchedulerService:
                 elif status in ['completed', 'failed']:
                     flow_history.end_time = datetime.now()
                     if error_msg:
-                        # 将错误信息存储在output_data中
-                        flow_history.output_data = json.dumps({'error': error_msg})
+                        # 保存错误信息到 payload 库
+                        save_flow_payload(history_id=flow_history_id, output_data=json.dumps({'error': error_msg}))
                 session.commit()
                 logger.info(f"更新FlowHistory {flow_history_id} 状态为: {status}")
         except Exception as e:
@@ -750,16 +743,7 @@ class SchedulerService:
         try:
             offset = 0
             while True:
-                # 【优化】使用 load_only 排除压缩字段，避免不必要的解压缩
-                pending_batch = session.query(FlowHistory).options(
-                    load_only(
-                        FlowHistory.id,
-                        FlowHistory.flow_id,
-                        FlowHistory.status,
-                        FlowHistory.created_at,
-                        FlowHistory.end_time
-                    )
-                ).filter(
+                pending_batch = session.query(FlowHistory).filter(
                     FlowHistory.status == 'pending',
                     FlowHistory.created_at < (now - pending_timeout)
                 ).limit(batch_size).offset(offset).all()
@@ -776,18 +760,19 @@ class SchedulerService:
 
                     if task_lost:
                         logger.warning(f"FlowHistory {history.id} (flow={history.flow_id}) 任务丢失，标记为失败")
-                        # 【优化】使用 update 语句直接更新，避免加载完整对象
                         session.query(FlowHistory).filter(
                             FlowHistory.id == history.id
                         ).update({
                             FlowHistory.status: 'failed',
-                            FlowHistory.end_time: now,
-                            FlowHistory.output_data: json.dumps({
-                                'error': '任务丢失：调度器重启或任务超时',
-                                'original_status': 'pending',
-                                'detected_at': now.isoformat()
-                            })
+                            FlowHistory.end_time: now
                         }, synchronize_session=False)
+                        
+                        # 保存错误信息到 payload 库
+                        save_flow_payload(history_id=history.id, output_data=json.dumps({
+                            'error': '任务丢失：调度器重启或任务超时',
+                            'original_status': 'pending',
+                            'detected_at': now.isoformat()
+                        }))
 
                         # 更新关联的 running 状态的 TaskHistory
                         session.query(TaskHistory).filter(
@@ -811,16 +796,7 @@ class SchedulerService:
         try:
             offset = 0
             while True:
-                # 【优化】使用 load_only 排除压缩字段
-                running_batch = session.query(FlowHistory).options(
-                    load_only(
-                        FlowHistory.id,
-                        FlowHistory.flow_id,
-                        FlowHistory.status,
-                        FlowHistory.start_time,
-                        FlowHistory.end_time
-                    )
-                ).filter(
+                running_batch = session.query(FlowHistory).filter(
                     FlowHistory.status == 'running',
                     FlowHistory.start_time < (now - running_timeout)
                 ).limit(batch_size).offset(offset).all()
@@ -837,18 +813,19 @@ class SchedulerService:
 
                     if running_tasks_count == 0:
                         logger.warning(f"FlowHistory {history.id} 无运行中任务但状态为 running，标记为失败")
-                        # 【优化】使用 update 语句直接更新
                         session.query(FlowHistory).filter(
                             FlowHistory.id == history.id
                         ).update({
                             FlowHistory.status: 'failed',
-                            FlowHistory.end_time: now,
-                            FlowHistory.output_data: json.dumps({
-                                'error': f'任务运行超时（超过 {running_timeout_hours} 小时）且无活动任务',
-                                'original_status': 'running',
-                                'detected_at': now.isoformat()
-                            })
+                            FlowHistory.end_time: now
                         }, synchronize_session=False)
+                        
+                        # 保存错误信息到 payload 库
+                        save_flow_payload(history_id=history.id, output_data=json.dumps({
+                            'error': f'任务运行超时（超过 {running_timeout_hours} 小时）且无活动任务',
+                            'original_status': 'running',
+                            'detected_at': now.isoformat()
+                        }))
                         result['running_count'] += 1
 
                 session.commit()
@@ -865,16 +842,7 @@ class SchedulerService:
         try:
             offset = 0
             while True:
-                # 【优化】使用 load_only 排除压缩字段
-                orphaned_batch = session.query(TaskHistory).options(
-                    load_only(
-                        TaskHistory.id,
-                        TaskHistory.flow_history_id,
-                        TaskHistory.status,
-                        TaskHistory.start_time,
-                        TaskHistory.end_time
-                    )
-                ).filter(
+                orphaned_batch = session.query(TaskHistory).filter(
                     TaskHistory.status == 'running',
                     TaskHistory.start_time < (now - running_timeout)
                 ).limit(batch_size).offset(offset).all()
@@ -883,10 +851,7 @@ class SchedulerService:
                     break
 
                 for task in orphaned_batch:
-                    # 【优化】只查询需要的字段
-                    flow_history = session.query(FlowHistory).options(
-                        load_only(FlowHistory.id, FlowHistory.status, FlowHistory.end_time)
-                    ).filter(
+                    flow_history = session.query(FlowHistory).filter(
                         FlowHistory.id == task.flow_history_id
                     ).first()
 

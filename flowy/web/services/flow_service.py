@@ -6,10 +6,14 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 
 from flowy.core.json_utils import json
-from sqlalchemy import func, desc, asc, and_
-from sqlalchemy.orm import load_only
+from sqlalchemy import func, desc, asc
 
-from flowy.core.db import Flow, FlowHistory, TaskHistory, get_session, get_running_tasks, get_flow_remarks
+from flowy.core.db import Flow, FlowHistory, TaskHistory, Trigger, get_session, get_running_tasks
+from flowy.core.payload import (
+    get_flow_input, get_flow_output, get_task_data as get_task_payload,
+    delete_flow_payload, batch_delete_flow_payload,
+    batch_delete_task_payload
+)
 
 
 class FlowService:
@@ -104,6 +108,63 @@ class FlowService:
 
         latest_status = latest_history.status if latest_history else None
         latest_execution = latest_history.created_at if latest_history else None
+        latest_history_id = latest_history.id if latest_history else None
+
+        # 获取触发器数量
+        trigger_count = session.query(func.count(Trigger.id)).filter(
+            Trigger.flow_id == flow_id
+        ).scalar() or 0
+        
+        # 获取启用的触发器数量
+        enabled_trigger_count = session.query(func.count(Trigger.id)).filter(
+            Trigger.flow_id == flow_id,
+            Trigger.enabled == True
+        ).scalar() or 0
+
+        # 获取最近10次执行的状态（只获取已完成或失败的）
+        recent_histories = session.query(FlowHistory.status).filter(
+            FlowHistory.flow_id == flow_id,
+            FlowHistory.status.in_(['completed', 'failed'])
+        ).order_by(desc(FlowHistory.created_at)).limit(10).all()
+        
+        recent_statuses = [h.status for h in recent_histories]
+
+        # 获取下次执行时间（从调度器获取最早的触发器执行时间）
+        next_run_time = None
+        if trigger_count > 0 and enabled_trigger_count > 0:
+            try:
+                from flowy.web.services.scheduler_service import SchedulerService
+                from datetime import datetime
+                
+                # 检查调度器是否运行
+                if not SchedulerService._scheduler or not SchedulerService._scheduler.running:
+                    # 调度器未运行，跳过
+                    pass
+                else:
+                    # 获取该 flow 所有启用的触发器
+                    enabled_triggers = session.query(Trigger).filter(
+                        Trigger.flow_id == flow_id,
+                        Trigger.enabled == True
+                    ).all()
+                    
+                    # 从调度器获取每个触发器的下次执行时间，取最早的
+                    earliest_time = None
+                    for trigger in enabled_triggers:
+                        job_id = f"trigger_{trigger.id}"
+                        job_status = SchedulerService.get_job_status(job_id)
+                        if job_status and job_status.get('next_run_time'):
+                            try:
+                                job_next_run = datetime.fromisoformat(job_status['next_run_time'])
+                                if earliest_time is None or job_next_run < earliest_time:
+                                    earliest_time = job_next_run
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    next_run_time = earliest_time
+            except Exception as e:
+                # 如果获取失败，忽略错误，不影响页面加载
+                import logging
+                logging.getLogger(__name__).debug(f"获取下次执行时间失败: {e}")
 
         return {
             'total_count': total_count,
@@ -115,7 +176,12 @@ class FlowService:
             'avg_duration': avg_duration,
             'avg_wait_time': avg_wait_time,
             'latest_status': latest_status,
-            'latest_execution': latest_execution
+            'latest_execution': latest_execution,
+            'latest_history_id': latest_history_id,
+            'trigger_count': trigger_count,
+            'enabled_trigger_count': enabled_trigger_count,
+            'recent_statuses': recent_statuses,
+            'next_run_time': next_run_time
         }
 
     @staticmethod
@@ -153,34 +219,13 @@ class FlowService:
 
     @staticmethod
     def get_flow_history_output(history_id: int) -> Optional[Dict]:
-        """获取执行历史的输出数据（用于列表页按需加载）
-        
-        Args:
-            history_id: 执行历史ID
-            
-        Returns:
-            解析后的输出数据字典，如果记录不存在返回 None
-        """
-        session = get_session()
-        try:
-            # 只查询 output_data 字段
-            history = session.query(FlowHistory).options(
-                load_only(FlowHistory.id, FlowHistory.output_data)
-            ).filter(FlowHistory.id == history_id).first()
-            
-            if not history:
-                return None
-            
-            try:
-                output = json.safe_loads(history.output_data or '{}')
-                # 处理双重编码的情况
-                if isinstance(output, str):
-                    output = json.safe_loads(output)
-                return output
-            except (ValueError, TypeError):
-                return {}
-        finally:
-            session.close()
+        """获取执行历史的输出数据"""
+        return get_flow_output(history_id)
+
+    @staticmethod
+    def get_flow_history_input(history_id: int) -> Optional[Dict]:
+        """获取执行历史的输入数据"""
+        return get_flow_input(history_id)
 
     @staticmethod
     def get_flow_statistics(flow_id: str) -> Dict:
@@ -197,27 +242,10 @@ class FlowService:
     @staticmethod
     def get_flow_history_paginated(flow_id: str, page: int = 1, per_page: int = 30,
                                    status_filter: str = None) -> Tuple[List[FlowHistory], int]:
-        """获取Flow执行历史分页列表
-        
-        优化：使用 load_only 排除 output_data 压缩字段，避免不必要的磁盘读取和解压缩
-        注意：保留 input_data 用于"重新执行"功能
-        """
+        """获取Flow执行历史分页列表"""
         session = get_session()
         try:
-            # 【优化】只排除 output_data（通常比 input_data 大得多）
-            # 保留 input_data 用于列表页的"重新执行"功能
-            query = session.query(FlowHistory).options(
-                load_only(
-                    FlowHistory.id,
-                    FlowHistory.flow_id,
-                    FlowHistory.flow_metadata,
-                    FlowHistory.status,
-                    FlowHistory.created_at,
-                    FlowHistory.start_time,
-                    FlowHistory.end_time,
-                    FlowHistory.input_data  # 保留 input_data
-                )
-            ).filter(FlowHistory.flow_id == flow_id)
+            query = session.query(FlowHistory).filter(FlowHistory.flow_id == flow_id)
 
             if status_filter:
                 query = query.filter(FlowHistory.status == status_filter)
@@ -226,48 +254,40 @@ class FlowService:
             total = query.count()
             histories = query.offset((page - 1) * per_page).limit(per_page).all()
 
-            # 解析JSON数据并为运行中的历史记录获取正在运行的任务
             for history in histories:
-                # 先从会话中分离对象，避免 autoflush 问题
-                session.expunge(history)
-
-                # 解析 input_data（保留用于重新执行功能）
-                try:
-                    history.input_data = json.safe_loads(history.input_data or '{}')
-                except (ValueError, TypeError):
-                    history.input_data = {}
-
-                # 【优化】output_data 未加载，设置为空字典
-                # 列表页不需要显示输出数据，需要时请使用详情API
-                history.output_data = {}
-
                 # 解析触发器信息和备注
-                history.trigger_name = None
-                history.trigger_type = None
-                history.remarks = []
+                trigger_name = None
+                trigger_type = None
+                remarks = []
                 try:
                     metadata = json.safe_loads(history.flow_metadata or '{}')
-                    history.trigger_name = metadata.get('trigger_name')
-                    history.trigger_type = metadata.get('trigger_type')
-                    history.remarks = metadata.get('remarks', [])
+                    trigger_name = metadata.get('trigger_name')
+                    trigger_type = metadata.get('trigger_type')
+                    remarks = metadata.get('remarks', [])
                 except (ValueError, TypeError):
                     pass
+                
+                session.expunge(history)
+                
+                history.__dict__['trigger_name'] = trigger_name
+                history.__dict__['trigger_type'] = trigger_type
+                history.__dict__['remarks'] = remarks
 
-                # 计算备注的最高级别（用于前端显示图标颜色）
-                history.remark_level = None
-                if history.remarks:
-                    # 优先级：error > warning > info
-                    if any(r['level'] == 'error' for r in history.remarks):
-                        history.remark_level = 'error'
-                    elif any(r['level'] == 'warning' for r in history.remarks):
-                        history.remark_level = 'warning'
+                # 计算备注的最高级别
+                remark_level = None
+                if remarks:
+                    if any(r['level'] == 'error' for r in remarks):
+                        remark_level = 'error'
+                    elif any(r['level'] == 'warning' for r in remarks):
+                        remark_level = 'warning'
                     else:
-                        history.remark_level = 'info'
+                        remark_level = 'info'
+                history.__dict__['remark_level'] = remark_level
 
-                # 对于运行中的历史记录，获取正在运行的任务及其进度
+                # 获取运行中的任务
                 if history.status == 'running':
                     running_tasks = get_running_tasks(session, history.id)
-                    history.running_tasks = [
+                    history.__dict__['running_tasks'] = [
                         {
                             'id': t.id,
                             'name': t.name,
@@ -278,12 +298,11 @@ class FlowService:
                         for t in running_tasks
                     ]
                 else:
-                    # 对于非运行状态，获取最后一个任务用于展示
                     last_task = session.query(TaskHistory).filter(
                         TaskHistory.flow_history_id == history.id
                     ).order_by(desc(TaskHistory.created_at)).first()
                     if last_task:
-                        history.running_tasks = [
+                        history.__dict__['running_tasks'] = [
                             {
                                 'id': last_task.id,
                                 'name': last_task.name,
@@ -293,7 +312,7 @@ class FlowService:
                             }
                         ]
                     else:
-                        history.running_tasks = []
+                        history.__dict__['running_tasks'] = []
 
             return histories, (total + per_page - 1) // per_page
         finally:
@@ -301,10 +320,7 @@ class FlowService:
 
     @staticmethod
     def get_flow_history_detail(history_id: int) -> Optional[Dict]:
-        """获取执行历史详情
-        
-        优化：TaskHistory 不加载 input_data/output_data，通过单独API按需加载
-        """
+        """获取执行历史详情"""
         session = get_session()
         try:
             history = session.query(FlowHistory).filter(
@@ -314,26 +330,11 @@ class FlowService:
             if not history:
                 return None
 
-            # 获取Flow信息
             flow = session.query(Flow).filter(
                 Flow.id == history.flow_id
             ).first()
 
-            # 【优化】TaskHistory 只加载必要字段，排除压缩的 input_data/output_data
-            task_histories = session.query(TaskHistory).options(
-                load_only(
-                    TaskHistory.id,
-                    TaskHistory.flow_history_id,
-                    TaskHistory.name,
-                    TaskHistory.status,
-                    TaskHistory.created_at,
-                    TaskHistory.start_time,
-                    TaskHistory.end_time,
-                    TaskHistory.progress,
-                    TaskHistory.progress_message,
-                    TaskHistory.progress_updated_at
-                )
-            ).filter(
+            task_histories = session.query(TaskHistory).filter(
                 TaskHistory.flow_history_id == history_id
             ).order_by(asc(TaskHistory.created_at)).all()
 
@@ -343,15 +344,14 @@ class FlowService:
             for task in task_histories:
                 session.expunge(task)
 
-            try:
-                history.input_data = json.safe_loads(history.input_data or '{}')
-            except (ValueError, TypeError):
-                history.input_data = {}
+            # 从 payload 库获取输入输出数据
+            history.input_data = get_flow_input(history_id) or {}
+            history.output_data = get_flow_output(history_id) or {}
 
-            try:
-                history.output_data = json.safe_loads(history.output_data or '{}')
-            except (ValueError, TypeError):
-                history.output_data = {}
+            # 为 task 设置空的 input_data/output_data（通过单独 API 按需加载）
+            for task in task_histories:
+                task.input_data = {}
+                task.output_data = {}
 
             # 解析备注信息
             history.remarks = []
@@ -359,7 +359,6 @@ class FlowService:
             try:
                 metadata = json.safe_loads(history.flow_metadata or '{}')
                 history.remarks = metadata.get('remarks', [])
-                # 计算备注的最高级别
                 if history.remarks:
                     if any(r['level'] == 'error' for r in history.remarks):
                         history.remark_level = 'error'
@@ -370,17 +369,13 @@ class FlowService:
             except (ValueError, TypeError):
                 pass
 
-            # 【优化】task 的 input_data/output_data 设为空，通过API按需加载
-            for task in task_histories:
-                task.input_data = {}
-                task.output_data = {}
-
             return {
                 'flow_history': history,
                 'task_histories': task_histories,
                 'flow': flow
             }
         finally:
+            session.close()
             session.close()
 
 
@@ -397,6 +392,11 @@ class FlowService:
             if not history:
                 return False
 
+            # 获取关联的任务ID列表
+            task_ids = [t.id for t in session.query(TaskHistory.id).filter(
+                TaskHistory.flow_history_id == history_id
+            ).all()]
+
             # 删除关联的任务历史
             session.query(TaskHistory).filter(
                 TaskHistory.flow_history_id == history_id
@@ -405,6 +405,12 @@ class FlowService:
             # 删除执行历史
             session.delete(history)
             session.commit()
+            
+            # 删除 payload 数据
+            delete_flow_payload(history_id)
+            if task_ids:
+                batch_delete_task_payload(task_ids)
+            
             return True
         except Exception:
             session.rollback()
@@ -414,12 +420,13 @@ class FlowService:
 
     @staticmethod
     def batch_delete_flow_history(history_ids: List[int]) -> Tuple[int, int]:
-        """批量删除执行历史
-        返回 (成功数量, 失败数量)
-        """
+        """批量删除执行历史"""
         session = get_session()
         success_count = 0
         failed_count = 0
+        all_task_ids = []
+        deleted_history_ids = []
+        
         try:
             for history_id in history_ids:
                 try:
@@ -428,12 +435,18 @@ class FlowService:
                     ).first()
 
                     if history:
+                        # 收集任务ID
+                        task_ids = [t.id for t in session.query(TaskHistory.id).filter(
+                            TaskHistory.flow_history_id == history_id
+                        ).all()]
+                        all_task_ids.extend(task_ids)
+                        
                         # 删除关联的任务历史
                         session.query(TaskHistory).filter(
                             TaskHistory.flow_history_id == history_id
                         ).delete()
-                        # 删除执行历史
                         session.delete(history)
+                        deleted_history_ids.append(history_id)
                         success_count += 1
                     else:
                         failed_count += 1
@@ -441,6 +454,13 @@ class FlowService:
                     failed_count += 1
 
             session.commit()
+            
+            # 批量删除 payload 数据
+            if deleted_history_ids:
+                batch_delete_flow_payload(deleted_history_ids)
+            if all_task_ids:
+                batch_delete_task_payload(all_task_ids)
+            
             return success_count, failed_count
         except Exception:
             session.rollback()
@@ -449,43 +469,36 @@ class FlowService:
             session.close()
 
     @staticmethod
-    def get_task_histories(history_id: int) -> List[TaskHistory]:
-        """获取执行历史的任务列表
-        
-        优化：不加载 input_data/output_data 压缩字段
-        """
+    def get_task_histories(history_id: int) -> List[Dict]:
+        """获取执行历史的任务列表"""
         session = get_session()
         try:
-            task_histories = session.query(TaskHistory).options(
-                load_only(
-                    TaskHistory.id,
-                    TaskHistory.flow_history_id,
-                    TaskHistory.name,
-                    TaskHistory.status,
-                    TaskHistory.created_at,
-                    TaskHistory.start_time,
-                    TaskHistory.end_time,
-                    TaskHistory.progress,
-                    TaskHistory.progress_message,
-                    TaskHistory.progress_updated_at
-                )
-            ).filter(
+            results = session.query(TaskHistory).filter(
                 TaskHistory.flow_history_id == history_id
             ).order_by(asc(TaskHistory.created_at)).all()
 
-            # 分离对象以避免会话问题
-            for task in task_histories:
-                session.expunge(task)
+            task_list = []
+            for task in results:
+                task_list.append({
+                    'id': task.id,
+                    'flow_history_id': task.flow_history_id,
+                    'name': task.name,
+                    'status': task.status,
+                    'created_at': task.created_at,
+                    'start_time': task.start_time,
+                    'end_time': task.end_time,
+                    'progress': task.progress,
+                    'progress_message': task.progress_message,
+                    'progress_updated_at': task.progress_updated_at
+                })
 
-            return task_histories
+            return task_list
         finally:
             session.close()
 
     @staticmethod
     def get_task_data(task_id: int) -> Optional[Dict]:
         """获取任务的输入输出数据"""
-        from flowy.core.json_utils import json
-
         session = get_session()
         try:
             task = session.query(TaskHistory).filter(
@@ -495,30 +508,15 @@ class FlowService:
             if not task:
                 return None
 
-            session.expunge(task)
-
-            # 解析 JSON 数据
-            input_data = None
-            output_data = None
-
-            if task.input_data:
-                try:
-                    input_data = json.safe_loads(task.input_data)
-                except (ValueError, TypeError):
-                    input_data = task.input_data
-
-            if task.output_data:
-                try:
-                    output_data = json.safe_loads(task.output_data)
-                except (ValueError, TypeError):
-                    output_data = task.output_data
+            # 从 payload 库获取数据
+            payload = get_task_payload(task_id) or {}
 
             return {
                 'id': task.id,
                 'name': task.name,
                 'status': task.status,
-                'input_data': input_data,
-                'output_data': output_data,
+                'input_data': payload.get('input_data'),
+                'output_data': payload.get('output_data'),
                 'created_at': task.created_at.isoformat() if task.created_at else None,
                 'start_time': task.start_time.isoformat() if task.start_time else None,
                 'end_time': task.end_time.isoformat() if task.end_time else None

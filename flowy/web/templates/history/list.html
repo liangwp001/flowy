@@ -1009,10 +1009,11 @@
                             <span class="auto-refresh-slider"></span>
                         </label>
                         <span class="auto-refresh-label">
-                            <i class="bi bi-arrow-clockwise"></i>
+                            <i class="bi bi-arrow-clockwise manual-refresh-btn" onclick="manualRefresh()" title="点击手动刷新"></i>
                             自动刷新
                         </span>
                         <span class="auto-refresh-status" id="autoRefreshStatus"></span>
+                        <span class="last-refresh-time" id="lastRefreshTime" title="上次刷新时间"></span>
                     </div>
                     <button class="filter-toggle" onclick="toggleFilter()">
                         <i class="bi bi-chevron-up" id="filterToggleIcon"></i>
@@ -1227,15 +1228,11 @@
                                 {% endif %}
                             </td>
                             <td onclick="event.stopPropagation()">
-                                {% if history.input_data %}
-                                    <button type="button" class="data-preview-btn view-data-btn"
-                                            data-title="输入数据"
-                                            data-data='{{ history.input_data|tojson|e }}'>
-                                        <i class="bi bi-eye"></i>
-                                    </button>
-                                {% else %}
-                                    <span style="color: #9ca3af;">-</span>
-                                {% endif %}
+                                <button type="button" class="data-preview-btn view-input-btn"
+                                        data-title="输入数据"
+                                        data-history-id="{{ history.id }}">
+                                    <i class="bi bi-eye"></i>
+                                </button>
                             </td>
                             <td onclick="event.stopPropagation()">
                                 {% if history.status in ['completed', 'failed'] %}
@@ -1265,8 +1262,7 @@
                                     </button>
                                     <button class="action-btn retry-btn" data-tooltip="使用相同参数重新执行"
                                             data-flow-id="{{ flow.id }}"
-                                            data-history-id="{{ history.id }}"
-                                            data-input-data='{{ history.input_data|tojson|e }}'>
+                                            data-history-id="{{ history.id }}">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </button>
                                     <button class="action-btn delete-btn" data-tooltip="删除"
@@ -1824,6 +1820,40 @@ function handleDataPreviewClick(event) {
     viewData(data, title);
 }
 
+// 处理输入数据预览按钮点击事件（通过API加载）
+async function handleInputPreviewClick(event) {
+    const button = event.currentTarget;
+    const historyId = button.dataset.historyId;
+    const originalHTML = button.innerHTML;
+    
+    // 显示加载状态
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    button.disabled = true;
+    
+    try {
+        const response = await fetch(`/api/history/${historyId}/input`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const inputData = result.data.input_data;
+            if (inputData && Object.keys(inputData).length > 0) {
+                viewData(JSON.stringify(inputData), '输入数据');
+            } else {
+                showNotification('暂无输入数据', 'info');
+            }
+        } else {
+            showNotification(result.error || '加载失败', 'error');
+        }
+    } catch (error) {
+        console.error('加载输入数据失败:', error);
+        showNotification('加载输入数据失败', 'error');
+    } finally {
+        // 恢复按钮状态
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+    }
+}
+
 // 处理输出数据预览按钮点击事件（通过API加载）
 async function handleOutputPreviewClick(event) {
     const button = event.currentTarget;
@@ -2210,33 +2240,42 @@ function rerunFlow(flowId) {
 }
 
 // 处理重试按钮点击事件
-function handleRetryButtonClick(event) {
+async function handleRetryButtonClick(event) {
     const button = event.currentTarget;
     const flowId = button.dataset.flowId;
     const historyId = button.dataset.historyId;
-    const inputDataAttr = button.dataset.inputData;
+    const originalHTML = button.innerHTML;
 
     console.log('重试按钮点击 - Flow ID:', flowId);
     console.log('重试按钮点击 - History ID:', historyId);
-    console.log('重试按钮点击 - 原始输入数据属性:', inputDataAttr);
 
-    // 解析输入数据 - 现在只需要单次解析
-    let originalInputData = null;
-    if (inputDataAttr && inputDataAttr !== 'null' && inputDataAttr !== 'None' && inputDataAttr !== '') {
-        try {
-            originalInputData = JSON.parse(inputDataAttr);
-            console.log('解析后的输入数据:', originalInputData);
-        } catch (e) {
-            console.error('解析输入数据失败:', e);
-            console.log('使用原始字符串:', inputDataAttr);
-            originalInputData = inputDataAttr;
+    // 显示加载状态
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    button.disabled = true;
+
+    try {
+        // 通过 API 加载输入数据
+        const response = await fetch(`/api/history/${historyId}/input`);
+        const result = await response.json();
+        
+        let originalInputData = null;
+        if (result.success && result.data.input_data) {
+            originalInputData = result.data.input_data;
+            console.log('从API加载的输入数据:', originalInputData);
+        } else {
+            console.log('没有输入数据或加载失败');
         }
-    } else {
-        console.log('没有输入数据或数据为空');
-    }
 
-    // 调用重试函数
-    retryFlowWithParams(flowId, historyId, originalInputData);
+        // 调用重试函数
+        retryFlowWithParams(flowId, historyId, originalInputData);
+    } catch (error) {
+        console.error('加载输入数据失败:', error);
+        showNotification('加载输入数据失败', 'error');
+    } finally {
+        // 恢复按钮状态
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+    }
 }
 
 // 使用原始参数重新执行Flow
@@ -2426,9 +2465,122 @@ function startAutoRefresh() {
                 updateAutoRefreshStatus(null, true);
             });
 
-        // 刷新页面
-        location.reload();
+        // 刷新页面内容（使用 AJAX 而不是整页刷新）
+        refreshPageContent();
     }, 5000);
+}
+
+// 手动刷新（点击图标触发）
+function manualRefresh() {
+    const icon = document.querySelector('.manual-refresh-btn');
+    if (icon) {
+        icon.classList.add('spinning');
+    }
+    
+    refreshPageContent();
+    
+    // 动画结束后移除 spinning 类
+    setTimeout(() => {
+        if (icon) {
+            icon.classList.remove('spinning');
+        }
+    }, 500);
+}
+
+// 保存当前展开的行 ID 列表
+function getExpandedRowIds() {
+    const expandedRows = document.querySelectorAll('tr.expandable-row.expanded');
+    return Array.from(expandedRows).map(row => row.dataset.historyId);
+}
+
+// 恢复展开状态
+function restoreExpandedRows(expandedIds) {
+    expandedIds.forEach(historyId => {
+        const row = document.querySelector(`tr[data-history-id="${historyId}"]`);
+        const detailRow = document.querySelector(`tr[data-detail-for="${historyId}"]`);
+        
+        if (row && detailRow) {
+            row.classList.add('expanded');
+            detailRow.classList.add('visible');
+            
+            // 如果之前已加载过任务数据，重新渲染
+            if (loadedTaskData[historyId]) {
+                renderTaskList(historyId, loadedTaskData[historyId]);
+            } else {
+                // 否则重新加载
+                loadTaskHistory(historyId);
+            }
+        }
+    });
+}
+
+// 更新刷新时间显示
+function updateLastRefreshTime() {
+    const timeElement = document.getElementById('lastRefreshTime');
+    if (timeElement) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        timeElement.textContent = `更新于 ${timeStr}`;
+    }
+}
+
+// 使用 AJAX 刷新页面内容，避免整页刷新导致状态丢失
+function refreshPageContent() {
+    // 保存当前展开的行
+    const expandedIds = getExpandedRowIds();
+    
+    // 获取当前 URL（保留筛选参数）
+    const currentUrl = window.location.href;
+    
+    fetch(currentUrl, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.text())
+    .then(html => {
+        // 解析返回的 HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // 只更新表格内容
+        const newTableBody = doc.querySelector('#historyTable tbody');
+        const currentTableBody = document.querySelector('#historyTable tbody');
+        if (newTableBody && currentTableBody) {
+            currentTableBody.innerHTML = newTableBody.innerHTML;
+        }
+        
+        // 更新统计卡片
+        const newStats = doc.querySelector('.stats-container');
+        const currentStats = document.querySelector('.stats-container');
+        if (newStats && currentStats) {
+            currentStats.innerHTML = newStats.innerHTML;
+        }
+        
+        // 重新绑定事件
+        bindTableEvents();
+        
+        // 恢复展开状态
+        restoreExpandedRows(expandedIds);
+        
+        // 更新刷新时间
+        updateLastRefreshTime();
+        
+        console.log('页面内容已刷新');
+    })
+    .catch(error => {
+        console.error('刷新内容失败:', error);
+    });
+}
+
+// 绑定表格事件（刷新后需要重新绑定）
+function bindTableEvents() {
+    // 重新绑定复选框事件
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = false;
+    }
+    updateSelectedCount();
 }
 
 function stopAutoRefresh() {
@@ -2689,16 +2841,12 @@ function renderTaskItem(task) {
                 </div>
             </div>
             <div class="task-item-actions">
-                ${task.has_input ? `
-                    <button class="task-action-btn" data-tooltip="查看输入" onclick="viewTaskData(${task.id}, 'input')">
-                        <i class="bi bi-box-arrow-in-down-right"></i>
-                    </button>
-                ` : ''}
-                ${task.has_output ? `
-                    <button class="task-action-btn" data-tooltip="查看输出" onclick="viewTaskData(${task.id}, 'output')">
-                        <i class="bi bi-box-arrow-up-right"></i>
-                    </button>
-                ` : ''}
+                <button class="task-action-btn" data-tooltip="查看输入" onclick="viewTaskData(${task.id}, 'input')">
+                    <i class="bi bi-box-arrow-in-down-right"></i>
+                </button>
+                <button class="task-action-btn" data-tooltip="查看输出" onclick="viewTaskData(${task.id}, 'output')">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                </button>
             </div>
         </div>
     `;
@@ -2814,6 +2962,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 初始化运行中任务的实时时长更新
     initRunningDurationUpdate();
+    
+    // 显示初始刷新时间
+    updateLastRefreshTime();
 
     // 初始化自动刷新
     const autoRefreshToggle = document.getElementById('autoRefreshToggle');
@@ -2870,6 +3021,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const viewOutputButtons = document.querySelectorAll('.view-output-btn');
     viewOutputButtons.forEach(button => {
         button.addEventListener('click', handleOutputPreviewClick);
+    });
+
+    // 为输入数据预览按钮添加事件监听器（通过API加载）
+    const viewInputButtons = document.querySelectorAll('.view-input-btn');
+    viewInputButtons.forEach(button => {
+        button.addEventListener('click', handleInputPreviewClick);
     });
 
     // 初始化进度轮询

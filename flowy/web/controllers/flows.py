@@ -25,11 +25,17 @@ def list_flows(page=1):
 
         flows_with_stats = []
         for flow in flows:
-            stats = FlowService.get_flow_statistics(flow.id)
-            flows_with_stats.append({
-                'flow': flow,
-                'stats': stats
-            })
+            try:
+                stats = FlowService.get_flow_statistics(flow.id)
+                flows_with_stats.append({
+                    'flow': flow,
+                    'stats': stats
+                })
+            except Exception as e:
+                # 如果某个 flow 的统计信息获取失败，记录错误但继续处理其他 flow
+                current_app.logger.error(f'获取 Flow {flow.id} 统计信息失败: {e}')
+                import traceback
+                traceback.print_exc()
 
         return render_template(
             'flows/list.html',
@@ -39,6 +45,9 @@ def list_flows(page=1):
             search=search
         )
     except Exception as e:
+        current_app.logger.error(f'加载Flow列表失败: {e}')
+        import traceback
+        traceback.print_exc()
         flash(f'加载Flow列表失败: {str(e)}', 'error')
         return render_template(
             'flows/list.html',
@@ -243,30 +252,32 @@ def api_history_tasks(history_id):
     try:
         task_histories = FlowService.get_task_histories(history_id)
 
-        # 转换为字典格式
         tasks_data = []
         for task in task_histories:
             # 计算运行时长
             duration = None
-            if task.start_time and task.end_time:
-                duration = (task.end_time - task.start_time).total_seconds()
-            elif task.start_time:
+            start_time = task.get('start_time')
+            end_time = task.get('end_time')
+            if start_time and end_time:
+                duration = (end_time - start_time).total_seconds()
+            elif start_time:
                 # 运行中的任务
-                duration = (datetime.now() - task.start_time).total_seconds()
+                duration = (datetime.now() - start_time).total_seconds()
+
+            progress_updated_at = task.get('progress_updated_at')
+            created_at = task.get('created_at')
 
             tasks_data.append({
-                'id': task.id,
-                'name': task.name,
-                'status': task.status,
-                'progress': task.progress,
-                'progress_message': task.progress_message,
-                'progress_updated_at': task.progress_updated_at.isoformat() if task.progress_updated_at else None,
-                'created_at': task.created_at.isoformat() if task.created_at else None,
-                'start_time': task.start_time.isoformat() if task.start_time else None,
-                'end_time': task.end_time.isoformat() if task.end_time else None,
-                'duration': duration,
-                'has_input': bool(task.input_data),
-                'has_output': bool(task.output_data)
+                'id': task['id'],
+                'name': task['name'],
+                'status': task['status'],
+                'progress': task.get('progress'),
+                'progress_message': task.get('progress_message'),
+                'progress_updated_at': progress_updated_at.isoformat() if progress_updated_at else None,
+                'created_at': created_at.isoformat() if created_at else None,
+                'start_time': start_time.isoformat() if start_time else None,
+                'end_time': end_time.isoformat() if end_time else None,
+                'duration': duration
             })
 
         return jsonify({

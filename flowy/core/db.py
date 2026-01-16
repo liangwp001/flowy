@@ -3,38 +3,16 @@
 """Flowy数据库模块"""
 
 import os
-import zlib
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, create_engine, DateTime, Text, INTEGER, LargeBinary, TypeDecorator
+from sqlalchemy import Column, String, create_engine, DateTime, Text, INTEGER
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 from flowy.core.config import get_config
 
 Base = declarative_base()
 HistoryBase = declarative_base()
-
-
-class CompressedText(TypeDecorator):
-    """压缩文本类型，自动压缩和解压缩"""
-    impl = LargeBinary
-    cache_ok = True
-
-    def process_bind_param(self, value, dialect):
-        """写入时压缩"""
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = value.encode('utf-8')
-        # 使用最高压缩级别 9，优先考虑压缩率而非速度
-        return zlib.compress(value, level=9)
-
-    def process_result_value(self, value, dialect):
-        """读取时解压"""
-        if value is None:
-            return None
-        return zlib.decompress(value).decode('utf-8')
 
 
 class Trigger(Base):
@@ -61,6 +39,7 @@ class Flow(Base):
 
 
 class FlowHistory(HistoryBase):
+    """Flow 执行历史（不含 input/output 数据，存储在 payload 库）"""
     __tablename__ = 'flow_history'
     id = Column(INTEGER, primary_key=True, autoincrement=True)
     flow_metadata = Column(Text, default="")
@@ -68,12 +47,11 @@ class FlowHistory(HistoryBase):
     created_at = Column(DateTime)
     start_time = Column(DateTime)
     end_time = Column(DateTime)
-    input_data = Column(CompressedText)
-    output_data = Column(CompressedText)
     status = Column(String(64))
 
 
 class TaskHistory(HistoryBase):
+    """Task 执行历史（不含 input/output 数据，存储在 payload 库）"""
     __tablename__ = 'task_history'
     id = Column(INTEGER, primary_key=True)
     flow_history_id = Column(INTEGER)
@@ -81,8 +59,6 @@ class TaskHistory(HistoryBase):
     created_at = Column(DateTime)
     start_time = Column(DateTime)
     end_time = Column(DateTime)
-    input_data = Column(CompressedText)
-    output_data = Column(CompressedText)
     status = Column(String(64))
     progress = Column(INTEGER)  # 进度百分比 (0-100)，NULL 表示未设置
     progress_message = Column(String(256))  # 进度描述信息
@@ -149,6 +125,7 @@ def _get_session_maker():
 def init_database() -> None:
     """初始化数据库并执行待处理的迁移"""
     from pathlib import Path
+    from flowy.core.payload import init_payload_database
 
     config = get_config()
     os.makedirs(config.database_dir, exist_ok=True)
@@ -160,6 +137,8 @@ def init_database() -> None:
     Base.metadata.create_all(bind=_get_engine())
     # 初始化历史数据库（创建基础表结构）
     HistoryBase.metadata.create_all(bind=_get_history_engine())
+    # 初始化 payload 数据库
+    init_payload_database()
 
     # 如果是全新数据库，不需要迁移（字段已通过 create_all 创建）
     if is_new_database:
@@ -188,19 +167,15 @@ def create_flow_history(
         created_at: datetime,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
-        input_data: Optional[str] = None,
-        output_data: Optional[str] = None,
         status: str = 'pending',
         flow_metadata: Optional[str] = None
 ) -> FlowHistory:
-    """创建FlowHistory记录"""
+    """创建FlowHistory记录（不含 input/output）"""
     flow_history = FlowHistory(
         flow_metadata=flow_metadata or "",
         created_at=created_at,
         start_time=start_time,
         end_time=end_time,
-        input_data=input_data,
-        output_data=output_data,
         status=status,
         flow_id=flow_id,
     )
@@ -212,16 +187,13 @@ def update_flow_history(
         session: Session,
         history_id: int,
         end_time: Optional[datetime] = None,
-        output_data: Optional[str] = None,
         status: Optional[str] = None
 ) -> Optional[FlowHistory]:
-    """更新FlowHistory记录"""
+    """更新FlowHistory记录（不含 output）"""
     flow_history = session.query(FlowHistory).filter(FlowHistory.id == history_id).first()
     if flow_history:
         if end_time is not None:
             flow_history.end_time = end_time
-        if output_data is not None:
-            flow_history.output_data = output_data
         if status is not None:
             flow_history.status = status
     return flow_history
@@ -254,19 +226,15 @@ def create_task_history(
         created_at: datetime,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
-        input_data: Optional[str] = None,
-        output_data: Optional[str] = None,
         status: str = 'pending'
 ) -> TaskHistory:
-    """创建TaskHistory记录"""
+    """创建TaskHistory记录（不含 input/output）"""
     task_history = TaskHistory(
         flow_history_id=flow_history_id,
         name=name,
         created_at=created_at,
         start_time=start_time,
         end_time=end_time,
-        input_data=input_data,
-        output_data=output_data,
         status=status
     )
     session.add(task_history)
@@ -277,16 +245,13 @@ def update_task_history(
         session: Session,
         task_id: int,
         end_time: Optional[datetime] = None,
-        output_data: Optional[str] = None,
         status: Optional[str] = None
 ) -> Optional[TaskHistory]:
-    """更新TaskHistory记录"""
+    """更新TaskHistory记录（不含 output）"""
     task_history = session.query(TaskHistory).filter(TaskHistory.id == task_id).first()
     if task_history:
         if end_time is not None:
             task_history.end_time = end_time
-        if output_data is not None:
-            task_history.output_data = output_data
         if status is not None:
             task_history.status = status
     return task_history

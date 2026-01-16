@@ -4,10 +4,42 @@
 
 import json
 import os
+from functools import wraps
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 
 from flowy.core.db import Flow, FlowHistory, TaskHistory, get_session
+from flowy.core.config import get_config
+
+
+def check_auth(username: str, password: str) -> bool:
+    """验证用户名和密码"""
+    config = get_config()
+    return username == config.auth_username and password == config.auth_password
+
+
+def authenticate():
+    """返回401认证响应"""
+    return Response(
+        '需要登录才能访问此页面',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Login Required"'}
+    )
+
+
+def requires_auth(f):
+    """认证装饰器"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        config = get_config()
+        if not config.auth_enabled:
+            return f(*args, **kwargs)
+
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
 
 
 def create_app():
@@ -24,6 +56,29 @@ def create_app():
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'flowy-secret-key'
     app.config['FLOWS_PER_PAGE'] = 20
     app.config['HISTORY_PER_PAGE'] = 30
+
+    # 注入站点名称到所有模板
+    @app.context_processor
+    def inject_site_config():
+        config = get_config()
+        return {
+            'site_name': config.site_name
+        }
+
+    # 全局认证检查
+    @app.before_request
+    def before_request_auth():
+        config = get_config()
+        if not config.auth_enabled:
+            return None
+
+        # 静态文件不需要认证
+        if request.path.startswith('/static/'):
+            return None
+
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
 
     # 注册模板过滤器
     @app.template_filter('datetime')
@@ -68,17 +123,41 @@ def create_app():
     @app.template_filter('time_ago')
     def format_time_ago(value):
         """格式化时间为相对时间（如：2小时前）"""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         if value is None:
             return ''
 
-        now = datetime.now()
+        # 处理时区问题
         if isinstance(value, str):
             value = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
-
+        
+        # 如果 value 有时区信息，转换为本地时间
+        if value.tzinfo is not None:
+            # 转换为本地时间（移除时区信息）
+            value = value.replace(tzinfo=None)
+        
+        now = datetime.now()
         delta = now - value
         seconds = delta.total_seconds()
 
+        # 如果是未来时间（下次执行时间）
+        if seconds < 0:
+            seconds = abs(seconds)
+            if seconds < 60:
+                return '即将执行'
+            elif seconds < 3600:
+                minutes = int(seconds / 60)
+                return f'{minutes}分钟后'
+            elif seconds < 86400:
+                hours = int(seconds / 3600)
+                return f'{hours}小时后'
+            elif seconds < 604800:
+                days = int(seconds / 86400)
+                return f'{days}天后'
+            else:
+                return value.strftime('%Y-%m-%d')
+        
+        # 过去时间
         if seconds < 60:
             return '刚刚'
         elif seconds < 3600:

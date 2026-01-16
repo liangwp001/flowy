@@ -86,10 +86,11 @@
                 <thead>
                     <tr>
                         <th>Flow信息</th>
-                        <th>描述</th>
                         <th>总执行次数</th>
                         <th>成功率</th>
-                        <th>最近状态</th>
+                        <th>近10次</th>
+                        <th>触发器</th>
+                        <th>下次执行</th>
                         <th>最近执行</th>
                         <th>操作</th>
                     </tr>
@@ -100,15 +101,12 @@
                     {% set stats = item.stats %}
                     <tr>
                         <td>
-                            <div class="flow-cell">
+                            <div class="flow-cell" title="{{ flow.description or '' }}">
                                 <div class="flow-details">
                                     <div class="flow-name">{{ flow.name }}</div>
                                     <span class="flow-id">{{ flow.id }}</span>
                                 </div>
                             </div>
-                        </td>
-                        <td>
-                            <span class="flow-description">{{ flow.description or '暂无描述' }}</span>
                         </td>
                         <td>
                             <span class="execution-count">
@@ -118,34 +116,57 @@
                         </td>
                         <td>
                             {% if stats.total_count > 0 %}
-                                <div class="success-rate-container">
-                                    <div class="success-rate-bar">
-                                        <div class="success-rate-fill" style="width: {{ stats.success_rate }}%"></div>
-                                    </div>
-                                    <div class="success-rate-text">{{ stats.success_rate }}%</div>
+                                <span class="success-rate-badge {% if stats.success_rate >= 80 %}high{% elif stats.success_rate >= 50 %}medium{% else %}low{% endif %}">
+                                    {{ stats.success_rate }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats.recent_statuses %}
+                                <div class="recent-status-dots">
+                                    {% for status in stats.recent_statuses %}
+                                        <span class="status-dot {{ 'success' if status == 'completed' else 'failed' }}" title="{{ '成功' if status == 'completed' else '失败' }}"></span>
+                                    {% endfor %}
                                 </div>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>
-                            {% if stats.latest_status %}
-                                <div class="status-badge {{ stats.latest_status }}">
-                                    <i class="bi bi-{% if stats.latest_status == 'pending' %}clock{% elif stats.latest_status == 'running' %}arrow-repeat{% elif stats.latest_status == 'completed' %}check-circle{% elif stats.latest_status == 'failed' %}x-circle{% else %}question-circle{% endif %}"></i>
-                                    {{ '等待中' if stats.latest_status == 'pending' else ('运行中' if stats.latest_status == 'running' else ('已完成' if stats.latest_status == 'completed' else ('失败' if stats.latest_status == 'failed' else stats.latest_status))) }}
-                                </div>
+                            {% if stats.trigger_count > 0 %}
+                                <span class="trigger-count {% if stats.enabled_trigger_count == stats.trigger_count %}all-enabled{% elif stats.enabled_trigger_count > 0 %}partial-enabled{% else %}none-enabled{% endif %}" onclick="viewTriggers('{{ flow.id }}')" style="cursor: pointer;" title="点击查看触发器">
+                                    <i class="bi bi-alarm"></i>
+                                    {{ stats.enabled_trigger_count }}/{{ stats.trigger_count }}
+                                </span>
                             {% else %}
-                                <span class="text-muted">从未执行</span>
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats.next_run_time %}
+                                <span class="next-run-time-cell">
+                                    <i class="bi bi-clock"></i>
+                                    {{ stats.next_run_time|time_ago }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>
                             {% if stats.latest_execution %}
-                                <div class="time-cell">
-                                    <div class="time-primary">{{ stats.latest_execution|datetime }}</div>
-                                    <div class="time-secondary">{{ stats.latest_execution|time_ago }}</div>
-                                </div>
+                                <a href="{{ url_for('flows.history_detail', history_id=stats.latest_history_id) }}" class="latest-execution-link">
+                                    <div class="latest-execution-cell">
+                                        <span class="status-badge-mini {{ stats.latest_status }}">
+                                            <i class="bi bi-{% if stats.latest_status == 'pending' %}clock{% elif stats.latest_status == 'running' %}arrow-repeat{% elif stats.latest_status == 'completed' %}check-circle{% elif stats.latest_status == 'failed' %}x-circle{% else %}question-circle{% endif %}"></i>
+                                            {{ '等待' if stats.latest_status == 'pending' else ('运行中' if stats.latest_status == 'running' else ('成功' if stats.latest_status == 'completed' else ('失败' if stats.latest_status == 'failed' else stats.latest_status))) }}
+                                        </span>
+                                        <span class="execution-time">{{ stats.latest_execution|time_ago }}</span>
+                                    </div>
+                                </a>
                             {% else %}
-                                <span class="text-muted">-</span>
+                                <span class="text-muted">从未执行</span>
                             {% endif %}
                         </td>
                         <td>

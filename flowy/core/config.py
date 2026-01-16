@@ -21,6 +21,14 @@ class FlowyConfig:
     scheduler_max_workers: int = 10  # 调度器线程池最大工作线程数
     scheduler_timezone: str = 'Asia/Shanghai'  # 调度器时区
 
+    # 站点配置
+    site_name: str = 'Flowy'  # 自定义站点名称
+
+    # 认证配置
+    auth_enabled: bool = False  # 是否启用认证，默认关闭
+    auth_username: Optional[str] = None  # 认证用户名
+    auth_password: Optional[str] = None  # 认证密码
+
     @property
     def database_dir(self) -> str:
         """数据库目录"""
@@ -64,18 +72,43 @@ def get_config() -> FlowyConfig:
     return _config
 
 
-def configure(data_dir: Optional[str] = None) -> FlowyConfig:
+def configure(
+    data_dir: Optional[str] = None,
+    site_name: Optional[str] = None,
+    auth_enabled: bool = False,
+    auth_username: Optional[str] = None,
+    auth_password: Optional[str] = None,
+    **kwargs
+) -> FlowyConfig:
     """配置Flowy
 
     Args:
         data_dir: 数据目录路径，默认为当前工作目录下的 data 文件夹
+        site_name: 自定义站点名称，默认为 'Flowy'
+        auth_enabled: 是否启用认证，默认关闭
+        auth_username: 认证用户名
+        auth_password: 认证密码
+        **kwargs: 其他配置参数
 
     Returns:
         FlowyConfig: 配置对象
     """
     global _config
+    config_kwargs = {}
+
     if data_dir is not None:
-        _config = FlowyConfig(data_dir=data_dir)
-    else:
-        _config = FlowyConfig()
+        config_kwargs['data_dir'] = data_dir
+    if site_name is not None:
+        config_kwargs['site_name'] = site_name
+    if auth_enabled:
+        config_kwargs['auth_enabled'] = auth_enabled
+    if auth_username is not None:
+        config_kwargs['auth_username'] = auth_username
+    if auth_password is not None:
+        config_kwargs['auth_password'] = auth_password
+
+    # 合并其他配置参数
+    config_kwargs.update(kwargs)
+
+    _config = FlowyConfig(**config_kwargs)
     return _config

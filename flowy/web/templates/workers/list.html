@@ -1,0 +1,608 @@
+{% extends "base.html" %}
+
+{% block title %}Worker管理 - Flowy管理系统{% endblock %}
+
+{% set breadcrumb_items = [
+    {'title': 'Worker管理', 'url': None, 'icon': 'bi-hdd-stack'}
+] %}
+
+{% block extra_css %}
+<style>
+/* Worker管理页面样式 */
+.workers-container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.page-title i {
+    color: #3b82f6;
+}
+
+.stats-summary {
+    display: flex;
+    gap: 1rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.stat-item i {
+    font-size: 1rem;
+}
+
+.stat-item.online i { color: #22c55e; }
+.stat-item.offline i { color: #94a3b8; }
+.stat-item.draining i { color: #f59e0b; }
+
+/* Worker卡片 */
+.workers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 1.5rem;
+}
+
+.worker-card {
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.worker-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.worker-card-header {
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.worker-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.worker-id {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.875rem;
+    color: #1e293b;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.worker-hostname {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+}
+
+.worker-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.worker-status.online {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.worker-status.offline {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.worker-status.draining {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.worker-card-body {
+    padding: 1.25rem;
+}
+
+.worker-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.worker-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.625rem;
+    background: #e0e7ff;
+    color: #4338ca;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.worker-tag i {
+    font-size: 0.625rem;
+}
+
+.no-tags {
+    color: #94a3b8;
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.worker-meta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.meta-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.meta-value {
+    font-size: 0.875rem;
+    color: #1e293b;
+    font-weight: 500;
+}
+
+.meta-value.highlight {
+    color: #3b82f6;
+}
+
+.worker-card-footer {
+    padding: 0.75rem 1.25rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.btn-worker-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-worker-action.btn-drain {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+}
+
+.btn-worker-action.btn-drain:hover {
+    background: #fde68a;
+}
+
+.btn-worker-action.btn-release {
+    background: #e0e7ff;
+    color: #4338ca;
+    border-color: #a5b4fc;
+}
+
+.btn-worker-action.btn-release:hover {
+    background: #c7d2fe;
+}
+
+.btn-worker-action.btn-delete {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+.btn-worker-action.btn-delete:hover {
+    background: #fecaca;
+}
+
+.btn-worker-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    color: #cbd5e1;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    font-size: 1.25rem;
+    color: #475569;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #94a3b8;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* 刷新按钮 */
+.btn-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    color: #475569;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-refresh:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.btn-refresh.loading i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Toast通知 */
+.toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1050;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="workers-container">
+    <!-- 页面头部 -->
+    <div class="page-header">
+        <h1 class="page-title">
+            <i class="bi bi-hdd-stack"></i>
+            Worker管理
+        </h1>
+        <div class="d-flex align-items-center gap-3">
+            <div class="stats-summary">
+                <div class="stat-item online">
+                    <i class="bi bi-circle-fill"></i>
+                    <span id="onlineCount">0</span> 在线
+                </div>
+                <div class="stat-item draining">
+                    <i class="bi bi-circle-fill"></i>
+                    <span id="drainingCount">0</span> 下线中
+                </div>
+                <div class="stat-item offline">
+                    <i class="bi bi-circle-fill"></i>
+                    <span id="offlineCount">0</span> 离线
+                </div>
+            </div>
+            <button class="btn-refresh" onclick="refreshWorkers()" id="refreshBtn">
+                <i class="bi bi-arrow-clockwise"></i>
+                刷新
+            </button>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle"></i>
+        加载Worker列表失败: {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Worker列表 -->
+    {% if workers %}
+    <div class="workers-grid" id="workersGrid">
+        {% for item in workers %}
+        <div class="worker-card" data-worker-id="{{ item.worker.id }}" data-status="{{ item.worker.status }}">
+            <div class="worker-card-header">
+                <div class="worker-info">
+                    <div class="worker-id">{{ item.worker.id }}</div>
+                    <div class="worker-hostname">
+                        <i class="bi bi-pc-display"></i>
+                        {{ item.worker.hostname }}
+                    </div>
+                </div>
+                <div class="worker-status {{ item.worker.status }}">
+                    {% if item.worker.status == 'online' %}
+                        <i class="bi bi-circle-fill"></i> 在线
+                    {% elif item.worker.status == 'draining' %}
+                        <i class="bi bi-hourglass-split"></i> 下线中
+                    {% else %}
+                        <i class="bi bi-circle"></i> 离线
+                    {% endif %}
+                </div>
+            </div>
+            <div class="worker-card-body">
+                <!-- 标签 -->
+                <div class="worker-tags">
+                    {% if item.tags %}
+                        {% for tag in item.tags %}
+                        <span class="worker-tag">
+                            <i class="bi bi-tag-fill"></i>
+                            {{ tag }}
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="no-tags">无标签</span>
+                    {% endif %}
+                </div>
+                
+                <!-- 元数据 -->
+                <div class="worker-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">最后心跳</span>
+                        <span class="meta-value">
+                            {% if item.worker.last_heartbeat %}
+                                {{ item.worker.last_heartbeat|time_ago }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">注册时间</span>
+                        <span class="meta-value">
+                            {% if item.worker.registered_at %}
+                                {{ item.worker.registered_at|datetime }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">运行中任务</span>
+                        <span class="meta-value highlight">{{ item.running_tasks }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">待执行任务</span>
+                        <span class="meta-value">{{ item.claimed_tasks }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="worker-card-footer">
+                {% if item.worker.status == 'online' %}
+                    <button class="btn-worker-action btn-drain" 
+                            onclick="drainWorker('{{ item.worker.id }}')"
+                            title="设置为下线中状态，不再接受新任务">
+                        <i class="bi bi-pause-circle"></i>
+                        设为下线中
+                    </button>
+                {% endif %}
+                {% if item.claimed_tasks > 0 %}
+                    <button class="btn-worker-action btn-release"
+                            onclick="releaseWorkerTasks('{{ item.worker.id }}')"
+                            title="释放待执行的任务，让其他Worker认领">
+                        <i class="bi bi-box-arrow-right"></i>
+                        释放任务
+                    </button>
+                {% endif %}
+                {% if item.worker.status == 'offline' %}
+                    <button class="btn-worker-action btn-delete"
+                            onclick="removeWorker('{{ item.worker.id }}')"
+                            title="删除Worker记录">
+                        <i class="bi bi-trash"></i>
+                        删除
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">
+            <i class="bi bi-hdd-stack"></i>
+        </div>
+        <h3>暂无Worker</h3>
+        <p>当前没有注册的Worker节点。启动Worker进程后，它们将自动注册并显示在这里。</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Toast容器 -->
+<div class="toast-container" id="toastContainer"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 更新统计数据
+function updateStats() {
+    const cards = document.querySelectorAll('.worker-card');
+    let online = 0, draining = 0, offline = 0;
+    
+    cards.forEach(card => {
+        const status = card.dataset.status;
+        if (status === 'online') online++;
+        else if (status === 'draining') draining++;
+        else offline++;
+    });
+    
+    document.getElementById('onlineCount').textContent = online;
+    document.getElementById('drainingCount').textContent = draining;
+    document.getElementById('offlineCount').textContent = offline;
+}
+
+// 初始化统计
+updateStats();
+
+// 显示Toast通知
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show`;
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    container.appendChild(toast);
+    
+    // 3秒后自动消失
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 150);
+    }, 3000);
+}
+
+// 刷新Worker列表
+function refreshWorkers() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('loading');
+    btn.disabled = true;
+    
+    location.reload();
+}
+
+// 设置Worker为draining状态
+function drainWorker(workerId) {
+    if (!confirm(`确定要将Worker "${workerId}" 设置为下线中状态吗？\n\n下线中状态下，Worker将不再接受新任务，但会继续执行当前任务直到完成。`)) {
+        return;
+    }
+    
+    fetch(`/api/workers/${encodeURIComponent(workerId)}/drain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`Worker ${workerId} 已设置为下线中状态`, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(`操作失败: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('网络请求失败', 'error');
+    });
+}
+
+// 释放Worker的任务
+function releaseWorkerTasks(workerId) {
+    if (!confirm(`确定要释放Worker "${workerId}" 的待执行任务吗？\n\n这些任务将重新放回队列，由其他Worker认领执行。`)) {
+        return;
+    }
+    
+    fetch(`/api/workers/${encodeURIComponent(workerId)}/release`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`已释放 ${data.data.released_count} 个任务`, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(`操作失败: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('网络请求失败', 'error');
+    });
+}
+
+// 删除Worker
+function removeWorker(workerId) {
+    if (!confirm(`确定要删除Worker "${workerId}" 吗？\n\n此操作不可恢复。`)) {
+        return;
+    }
+    
+    fetch(`/api/workers/${encodeURIComponent(workerId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`Worker ${workerId} 已删除`, 'success');
+            // 移除卡片
+            const card = document.querySelector(`.worker-card[data-worker-id="${workerId}"]`);
+            if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.9)';
+                setTimeout(() => {
+                    card.remove();
+                    updateStats();
+                    // 如果没有Worker了，显示空状态
+                    if (document.querySelectorAll('.worker-card').length === 0) {
+                        location.reload();
+                    }
+                }, 300);
+            }
+        } else {
+            showToast(`操作失败: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('网络请求失败', 'error');
+    });
+}
+</script>
+{% endblock %}

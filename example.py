@@ -279,4 +279,21 @@ def batch_processing_flow(items: list) -> dict:
 # ============ 主程序 ============
 
 if __name__ == '__main__':
-    run(host='127.0.0.1', port=5000, debug=True)
+    # 基本启动方式（无认证）
+    # run(host='127.0.0.1', port=5000, debug=True)
+
+    # 自定义站点名称
+    # run(host='127.0.0.1', port=5000, debug=True, site_name='我的工作流系统')
+
+    # 启用用户名密码认证
+    # run(host='127.0.0.1', port=5000, debug=True, auth_username='admin', auth_password='123456')
+
+    # 同时自定义站点名称和启用认证
+    run(
+        host='127.0.0.1',
+        port=5000,
+        debug=True,
+        site_name='我的工作流系统',
+        auth_username='admin',
+        auth_password='123456'
+    )
