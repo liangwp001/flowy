@@ -1,0 +1,743 @@
+/* 
+ * 移动端响应式样式 - 桌面优先架构
+ * Responsive Mobile Styles - Desktop-First Architecture
+ * 
+ * 所有样式只在 max-width: 767px 时生效
+ * 不会影响任何现有的PC端样式
+ * 
+ * Requirements: 1.1, 1.2, 1.3, 1.4
+ */
+
+/* ========== 全局移动端变量 ========== */
+@media (max-width: 767px) {
+  :root {
+    /* 触摸目标最小尺寸 - 符合WCAG 2.1 AAA标准 */
+    --touch-target-min: 44px;
+    
+    /* 移动端间距 */
+    --mobile-spacing-xs: 0.25rem;
+    --mobile-spacing-sm: 0.5rem;
+    --mobile-spacing: 0.75rem;
+    --mobile-spacing-md: 1rem;
+    --mobile-spacing-lg: 1.5rem;
+    
+    /* 移动端字体大小 */
+    --mobile-font-size-xs: 0.7rem;
+    --mobile-font-size-sm: 0.8rem;
+    --mobile-font-size-base: 0.875rem;
+    --mobile-font-size-lg: 1rem;
+    
+    /* 移动端容器宽度 */
+    --mobile-container-padding: 1rem;
+    
+    /* 移动端圆角 */
+    --mobile-border-radius: 0.5rem;
+  }
+}
+
+/* ========== 响应式工具类 ========== */
+@media (max-width: 767px) {
+  /* 移动端隐藏 */
+  .d-mobile-none {
+    display: none !important;
+  }
+  
+  /* 移动端显示 */
+  .d-mobile-block {
+    display: block !important;
+  }
+  
+  .d-mobile-flex {
+    display: flex !important;
+  }
+  
+  /* 移动端全宽 */
+  .w-mobile-100 {
+    width: 100% !important;
+  }
+  
+  /* 移动端文本对齐 */
+  .text-mobile-center {
+    text-align: center !important;
+  }
+  
+  /* 移动端flex方向 */
+  .flex-mobile-column {
+    flex-direction: column !important;
+  }
+  
+  /* 移动端间距 */
+  .gap-mobile-sm {
+    gap: var(--mobile-spacing-sm) !important;
+  }
+  
+  .gap-mobile {
+    gap: var(--mobile-spacing) !important;
+  }
+  
+  .gap-mobile-md {
+    gap: var(--mobile-spacing-md) !important;
+  }
+}
+
+/* ========== 平板断点 (480px - 767px) ========== */
+@media (min-width: 480px) and (max-width: 767px) {
+  .d-tablet-block {
+    display: block !important;
+  }
+  
+  .d-tablet-flex {
+    display: flex !important;
+  }
+}
+
+/* ========== 小屏手机断点 (< 480px) ========== */
+@media (max-width: 479px) {
+  .d-small-mobile-none {
+    display: none !important;
+  }
+  
+  .d-small-mobile-block {
+    display: block !important;
+  }
+}
+
+/* ========================================================================== */
+/* 组件移动端样式 - Requirements: 2.1-2.4, 3.1-3.5, 4.1-4.5, 5.1-5.5,        */
+/*                              6.1-6.4, 7.1-7.4, 8.1-8.4, 9.1-9.3           */
+/* ========================================================================== */
+
+/* ========== 1. 导航栏移动端增强 (Requirements: 2.1-2.4, 7.1-7.3) ========== */
+@media (max-width: 767px) {
+  /* 增大导航链接触摸区域 - 最小44px */
+  .navbar-nav .nav-link {
+    padding: 0.875rem 1rem;
+    min-height: var(--touch-target-min);
+    display: flex;
+    align-items: center;
+  }
+  
+  /* 导航品牌触摸区域 */
+  .navbar-brand {
+    padding: 0.5rem 0;
+    min-height: var(--touch-target-min);
+    display: flex;
+    align-items: center;
+  }
+  
+  /* 汉堡菜单按钮增大 */
+  .navbar-toggler {
+    padding: 0.5rem 0.75rem;
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+  }
+  
+  /* 下拉菜单全宽显示 */
+  .navbar .dropdown-menu {
+    position: static !important;
+    transform: none !important;
+    width: 100%;
+    margin-top: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    box-shadow: none;
+  }
+  
+  /* 下拉菜单项触摸区域 */
+  .navbar .dropdown-item {
+    padding: 0.75rem 1rem;
+    min-height: var(--touch-target-min);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  /* 导航下拉触发器 */
+  .navbar .dropdown-toggle {
+    min-height: var(--touch-target-min);
+  }
+  
+  /* 导航折叠区域内边距 */
+  .navbar-collapse {
+    padding: 0.5rem 0;
+  }
+}
+
+/* ========== 2. 数据表格移动端适配 (Requirements: 3.1-3.5, 7.1) ========== */
+@media (max-width: 767px) {
+  /* 确保表格可横向滚动 - 平滑滚动 */
+  .table-responsive {
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    padding: 0 1rem;
+  }
+  
+  /* 表格区域紧凑内边距 */
+  .table-section {
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+  
+  /* 减小表格内边距和字体 */
+  .modern-table th,
+  .modern-table td,
+  .history-table th,
+  .history-table td {
+    padding: 0.75rem 0.5rem;
+    font-size: var(--mobile-font-size-sm);
+  }
+  
+  /* 表头首尾列内边距调整 */
+  .modern-table thead th:first-child,
+  .modern-table tbody td:first-child {
+    padding-left: 0.75rem;
+  }
+  
+  .modern-table thead th:last-child,
+  .modern-table tbody td:last-child {
+    padding-right: 0.75rem;
+  }
+  
+  /* 操作按钮紧凑排列 */
+  .action-group {
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+  }
+  
+  /* 操作按钮尺寸 - 保持触摸友好 */
+  .action-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0.375rem;
+  }
+  
+  /* Flow信息列紧凑显示 */
+  .flow-cell {
+    min-width: 120px;
+  }
+  
+  .flow-name {
+    font-size: var(--mobile-font-size-base);
+  }
+  
+  .flow-id {
+    font-size: var(--mobile-font-size-xs);
+  }
+  
+  .flow-description {
+    font-size: var(--mobile-font-size-xs);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  /* 状态徽章紧凑 */
+  .status-badge {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.65rem;
+  }
+  
+  /* 执行次数徽章紧凑 */
+  .execution-count,
+  .trigger-count {
+    padding: 0.375rem 0.625rem;
+    font-size: var(--mobile-font-size-sm);
+  }
+  
+  /* 时间单元格紧凑 */
+  .time-cell .time-primary {
+    font-size: var(--mobile-font-size-sm);
+  }
+  
+  .time-cell .time-secondary {
+    font-size: var(--mobile-font-size-xs);
+  }
+  
+  /* 成功率容器紧凑 */
+  .success-rate-container {
+    min-width: 100px;
+  }
+  
+  .success-rate-text {
+    font-size: var(--mobile-font-size-xs);
+  }
+}
+
+/* ========== 3. 统计卡片响应式布局 (Requirements: 4.1-4.5) ========== */
+@media (max-width: 767px) {
+  /* 移动端2列布局 */
+  .stats-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  
+  /* 统计卡片紧凑内边距 */
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  /* 统计卡片主区域 */
+  .stat-card-main {
+    margin-bottom: 0.75rem;
+  }
+  
+  /* 统计数值缩小 */
+  .stat-content h3,
+  .stat-left .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  /* 统计图标缩小 */
+  .stat-icon,
+  .stat-left .stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+  
+  /* 统计标签字体 */
+  .stat-label,
+  .stat-content p {
+    font-size: var(--mobile-font-size-sm);
+  }
+  
+  /* 统计页脚字体 */
+  .stat-footer {
+    font-size: var(--mobile-font-size-xs);
+  }
+}
+
+/* 小屏手机1列布局 */
+@media (max-width: 479px) {
+  .stats-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========== 4. 表单和筛选器移动端适配 (Requirements: 5.1-5.5, 7.1-7.3) ========== */
+@media (max-width: 767px) {
+  /* 筛选区域紧凑内边距 */
+  .filter-section,
+  .search-section {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  /* 筛选表单垂直堆叠 */
+  .filter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  /* 搜索表单垂直堆叠 */
+  .search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  /* 筛选组全宽 */
+  .filter-group,
+  .search-group {
+    width: 100%;
+  }
+  
+  /* 输入框最小高度44px - 防止iOS缩放 */
+  .filter-input,
+  .search-input,
+  .form-control,
+  .form-select {
+    min-height: var(--touch-target-min);
+    font-size: 16px; /* 防止iOS自动缩放 */
+    padding: 0.625rem 0.875rem;
+  }
+  
+  /* 筛选/搜索操作按钮区域 */
+  .filter-actions,
+  .search-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  
+  /* 按钮全宽显示 */
+  .btn-filter,
+  .btn-search {
+    width: 100%;
+    justify-content: center;
+    min-height: var(--touch-target-min);
+  }
+  
+  /* 日期范围垂直堆叠 */
+  .date-range-group {
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  
+  /* 隐藏日期分隔符 */
+  .date-separator {
+    display: none;
+  }
+  
+  /* 搜索头部垂直布局 */
+  .search-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  
+  /* 搜索头部控件 */
+  .search-header-controls {
+    justify-content: space-between;
+    order: -1;
+  }
+  
+  /* 筛选头部垂直布局 */
+  .filter-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  
+  /* 筛选头部控件 */
+  .filter-header-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  /* 自动刷新控件 */
+  .auto-refresh-control {
+    flex-shrink: 0;
+  }
+  
+  .auto-refresh-label {
+    font-size: var(--mobile-font-size-sm);
+  }
+  
+  .auto-refresh-status {
+    font-size: var(--mobile-font-size-xs);
+    padding: 0.2rem 0.4rem;
+  }
+  
+  /* 筛选标签 */
+  .filter-label,
+  .search-label {
+    font-size: var(--mobile-font-size-sm);
+  }
+}
+
+/* ========== 5. 模态框移动端适配 (Requirements: 6.1-6.4, 7.1) ========== */
+@media (max-width: 767px) {
+  /* 模态框接近全宽 */
+  .modal-dialog {
+    margin: 0.5rem;
+    max-width: calc(100% - 1rem);
+  }
+  
+  /* 大型模态框也接近全宽 */
+  .modal-dialog-lg,
+  .modal-dialog-xl {
+    max-width: calc(100% - 1rem);
+  }
+  
+  /* 模态框头部 */
+  .modal-header {
+    padding: 1rem;
+  }
+  
+  /* 模态框关闭按钮增大触摸区域 */
+  .modal-header .btn-close {
+    padding: 0.75rem;
+    margin: -0.5rem -0.5rem -0.5rem auto;
+  }
+  
+  /* 模态框内容区域 */
+  .modal-body {
+    padding: 1rem;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* 模态框底部按钮区域 */
+  .modal-footer {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  /* 模态框按钮全宽 */
+  .modal-footer .btn {
+    width: 100%;
+    min-height: var(--touch-target-min);
+    justify-content: center;
+  }
+  
+  /* 模态框表单输入 - 防止iOS缩放 */
+  .modal-body .form-control,
+  .modal-body .form-select,
+  .modal-body textarea,
+  .modal-body input {
+    font-size: 16px;
+    min-height: var(--touch-target-min);
+  }
+  
+  /* 模态框内表单标签 */
+  .modal-body .form-label {
+    font-size: var(--mobile-font-size-sm);
+  }
+}
+
+/* ========== 6. 分页组件移动端适配 (Requirements: 8.1-8.4, 7.1) ========== */
+@media (max-width: 767px) {
+  /* 分页包装器垂直布局 */
+  .pagination-wrapper {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+    padding: 1rem;
+  }
+  
+  /* 分页信息 */
+  .pagination-info {
+    font-size: var(--mobile-font-size-sm);
+    order: 1;
+  }
+  
+  /* 分页导航居中 */
+  .pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  
+  /* 分页按钮增大触摸区域 */
+  .page-link {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--mobile-font-size-sm);
+  }
+  
+  /* 分页按钮样式 */
+  .pagination-btn {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0.5rem 0.75rem;
+  }
+  
+  /* 分页导航容器 */
+  .pagination-nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+  
+  /* 每页条数下拉 */
+  .dropdown-toggle {
+    min-height: var(--touch-target-min);
+  }
+}
+
+/* ========== 7. 空状态和其他组件 (Requirements: 9.1-9.3) ========== */
+@media (max-width: 767px) {
+  /* 空状态容器 */
+  .empty-state {
+    padding: 2rem 1rem;
+  }
+  
+  /* 空状态图标缩小 */
+  .empty-state-icon {
+    width: 80px;
+    height: 80px;
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  /* 空状态标题 */
+  .empty-state h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  /* 空状态描述 */
+  .empty-state p {
+    font-size: var(--mobile-font-size-base);
+    margin-bottom: 1.5rem;
+  }
+  
+  /* 空状态操作按钮全宽 */
+  .empty-state-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .empty-state-actions .btn {
+    width: 100%;
+    min-height: var(--touch-target-min);
+  }
+  
+  /* 视图切换器垂直布局 */
+  .view-switcher {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+    padding: 1rem;
+  }
+  
+  /* 视图切换按钮组 */
+  .view-toggle-group {
+    width: 100%;
+    display: flex;
+  }
+  
+  .view-toggle-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: var(--touch-target-min);
+  }
+  
+  /* 表格操作区域 */
+  .table-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  /* 容器内边距调整 */
+  .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  /* 内容包装器内边距 */
+  .content-wrapper {
+    padding: 1rem 0;
+  }
+  
+  /* 页面操作区域 */
+  .page-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  
+  /* 加载遮罩 - 不遮挡导航 */
+  .loading-overlay {
+    z-index: 1040; /* 低于导航栏 */
+  }
+  
+  /* 加载旋转器居中 */
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+  }
+  
+  /* 卡片内边距调整 */
+  .card-body {
+    padding: 1rem;
+  }
+  
+  /* 按钮组垂直排列 */
+  .btn-group {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .btn-group .btn {
+    margin-bottom: 0.25rem;
+    border-radius: 0.375rem !important;
+  }
+  
+  /* 导出按钮 */
+  .export-btn {
+    min-height: var(--touch-target-min);
+    padding: 0.5rem 1rem;
+  }
+  
+  /* 工具提示在移动端隐藏 - 使用长按替代 */
+  [data-tooltip]::after {
+    display: none;
+  }
+}
+
+/* ========== 8. iOS Safari 特殊处理 ========== */
+@media (max-width: 767px) {
+  /* 防止iOS Safari自动缩放输入框 */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="date"],
+  input[type="datetime-local"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  
+  /* 启用平滑滚动 */
+  .table-responsive,
+  .modal-body,
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* 防止模态框打开时背景滚动 */
+  body.modal-open {
+    position: fixed;
+    width: 100%;
+    overflow: hidden;
+  }
+}
+
+/* ========== 9. 触摸交互增强 (Requirements: 7.1-7.4) ========== */
+@media (max-width: 767px) {
+  /* 所有可点击元素的最小触摸区域 */
+  a,
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* 链接内联元素例外 - 通过padding增加触摸区域 */
+  p a,
+  span a,
+  li a:not(.nav-link):not(.dropdown-item) {
+    min-height: auto;
+    min-width: auto;
+    padding: 0.25rem 0;
+    margin: -0.25rem 0;
+    display: inline-block;
+  }
+  
+  /* 相邻可点击元素间距 */
+  .action-group > *,
+  .btn-group > *,
+  .pagination > * {
+    margin: 0 0.125rem;
+  }
+  
+  /* 触摸反馈 - 活动状态 */
+  a:active,
+  button:active,
+  .btn:active {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+}
